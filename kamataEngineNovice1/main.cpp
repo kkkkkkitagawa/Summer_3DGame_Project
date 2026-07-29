@@ -5,6 +5,7 @@ const char kWindowTitle[] = "GC2C_06_タン_クンブン_AL3";
 struct Vector2 {
 	float x;
 	float y;
+
 };
 
 // Windowsアプリでのエントリーポイント(main関数)
