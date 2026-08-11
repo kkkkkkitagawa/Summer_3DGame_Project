@@ -94,8 +94,8 @@
       <AdditionalDependencies>KamataEngine.lib;DirectXTex.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy C:\KamataEngine\DirectXGame\Resources .\NoviceResources /S /E /I /D /R /Y
-xcopy C:\KamataEngine\DirectXGame\Resources "$(OutDirFullPath)NoviceResources" /S /E /I /D /R /Y</Command>
+      <Command>xcopy "$(ProjectDir)..\Resources" .\Resources /S /E /I /D /R /Y
+xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -126,8 +126,8 @@ xcopy C:\KamataEngine\DirectXGame\Resources "$(OutDirFullPath)NoviceResources" /
       <AdditionalLibraryDirectories>C:\KamataEngine\External\KamataEngine\lib\$(Configuration);C:\KamataEngine\External\DirectXTex\lib\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy C:\KamataEngine\DirectXGame\Resources .\NoviceResources /S /E /I /D /R /Y
-xcopy C:\KamataEngine\DirectXGame\Resources "$(OutDirFullPath)NoviceResources" /S /E /I /D /R /Y</Command>
+      <Command>xcopy "$(ProjectDir)..\Resources" .\Resources /S /E /I /D /R /Y
+xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -160,8 +160,8 @@ xcopy C:\KamataEngine\DirectXGame\Resources "$(OutDirFullPath)NoviceResources" /
       <LinkTimeCodeGeneration />
     </Link>
     <PostBuildEvent>
-      <Command>xcopy C:\KamataEngine\DirectXGame\Resources .\NoviceResources /S /E /I /D /R /Y
-xcopy C:\KamataEngine\DirectXGame\Resources "$(OutDirFullPath)NoviceResources" /S /E /I /D /R /Y</Command>
+      <Command>xcopy "$(ProjectDir)..\Resources" .\Resources /S /E /I /D /R /Y
+xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -169,9 +169,15 @@ xcopy C:\KamataEngine\DirectXGame\Resources "$(OutDirFullPath)NoviceResources" /
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp" />
+    <ClCompile Include="GameScene.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="WorldTransformUpdate.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="GameData.h" />
+    <ClInclude Include="GameScene.h" />
+    <ClInclude Include="Player.h" />
+    <ClInclude Include="WorldTransformUpdate.h" />
     <ClInclude Include="..\DirectXGame\3d\Camera.h" />
     <ClInclude Include="C:\KamataEngine\DirectXGame\base\StringUtility.h" />
     <ClInclude Include="C:\KamataEngine\DirectXGame\math\Matrix4x4.h" />
