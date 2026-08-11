@@ -5,5 +5,5 @@
     <BuildType Name="Release" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="kamataEngineNovice1/kamataEngineNovice1.vcxproj" />
+  <Project Path="kamataEngineNovice1/kamataEngineNovice1.vcxproj" Id="f6aabf9c-b12d-486e-8efb-b29e2f058eac" />
 </Solution>
