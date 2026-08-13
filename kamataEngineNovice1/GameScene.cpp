@@ -120,8 +120,12 @@ void GameScene::UpdateMapBlocks() {
 			block->worldTransform.rotation_ = {0.0f, 0.0f, 0.0f};
 		} else if (block->positionX < kShakeStartX) {
 			block->shakeTime += kDeltaTime;
-			const float shakeX = std::sin(block->shakeTime * kShakeFrequency) * kShakeAmount;
-			const float shakeY = std::cos(block->shakeTime * kShakeFrequency * 1.37f) * kShakeAmount;
+			const float shakeStrength = CalculateShakeStrength(block->positionX);
+			const float shakeAmount = kShakeAmount * shakeStrength;
+			const float shakeX =
+			    std::sin(block->shakeTime * kShakeFrequency) * shakeAmount;
+			const float shakeY =
+			    std::cos(block->shakeTime * kShakeFrequency * 1.37f) * shakeAmount;
 			block->worldTransform.translation_ = {
 			    block->positionX + shakeX,
 			    block->positionY + shakeY,
@@ -153,6 +157,14 @@ void GameScene::UpdateMapBlocks() {
 		}
 		SpawnMapBlock(frontX + kBlockSize);
 	}
+}
+
+float GameScene::CalculateShakeStrength(float positionX) const {
+	const float shakeRange = kShakeStartX - kFallStartX;
+	const float progress = std::clamp(
+	    (kShakeStartX - positionX) / shakeRange, 0.0f, 1.0f);
+	return kMinShakeStrength +
+	       (kMaxShakeStrength - kMinShakeStrength) * progress;
 }
 
 void GameScene::UpdateDebugCommand() {

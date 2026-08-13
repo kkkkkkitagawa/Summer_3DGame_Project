@@ -29,6 +29,7 @@ private:
 	void InitializeMapBlocks();
 	void UpdateMapBlocks();
 	void SpawnMapBlock(float positionX);
+	float CalculateShakeStrength(float positionX) const;
 	void DrawMapBlocks();
 	void UpdateDebugCommand();
 	void DrawDebugInfo();
@@ -87,11 +88,13 @@ private:
 	static inline const float kBlockSizePixels = 32.0f;
 	static inline const float kBlockSize = kBlockSizePixels / kPixelsPerWorldUnit;
 	static inline const float kBlockMoveSpeed = 2.0f;
-	static inline const float kShakeStartX = 0.0f;
-	static inline const float kFallStartX = -2.5f;
+	static inline const float kShakeStartX = -1.0f;
+	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;
 	static inline const float kGravity = 9.8f;
 	static inline const float kShakeFrequency = 38.0f;
 	static inline const float kShakeAmount = 2.0f / kPixelsPerWorldUnit;
+	static inline const float kMinShakeStrength = 0.5f;
+	static inline const float kMaxShakeStrength = 1.0f;
 	static inline const float kDeltaTime = 1.0f / 60.0f;
 };
