@@ -4,11 +4,15 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <cmath>
+#include <numbers>
 
 using namespace KamataEngine;
 
 namespace {
+bool isDebugTextInitialized = false;
+
 bool IsModifierKey(BYTE key) {
 	return key == DIK_LSHIFT || key == DIK_RSHIFT || key == DIK_LCONTROL ||
 	       key == DIK_RCONTROL || key == DIK_LALT || key == DIK_RALT;
@@ -16,11 +20,17 @@ bool IsModifierKey(BYTE key) {
 } // namespace
 
 GameScene::~GameScene() {
+	mapBlocks_.clear();
+	delete modelBlock_;
 	delete modelAxis_;
 	delete mouseCircleSprite_;
 }
 
 void GameScene::Initialize() {
+	modelBlock_ = Model::CreateFromOBJ("block", true);
+	assert(modelBlock_);
+	InitializeMapBlocks();
+
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
 
@@ -31,8 +41,8 @@ void GameScene::Initialize() {
 
 	playerCamera_.farZ = 1000.0f;
 	playerCamera_.Initialize();
-	playerCamera_.translation_ = {0.0f, 6.0f, -18.0f};
-	playerCamera_.rotation_ = {0.32f, 0.0f, 0.0f};
+	playerCamera_.translation_ = {-3.395f, 5.308f, -6.101f};
+	playerCamera_.rotation_ = {0.625002f, 0.419926f, 0.0f};
 	playerCamera_.UpdateMatrix();
 
 	debugCamera_.farZ = 1000.0f;
@@ -52,6 +62,13 @@ void GameScene::Initialize() {
 	primitiveDrawer_ = PrimitiveDrawer::GetInstance();
 	primitiveDrawer_->SetCamera(&GetActiveCamera());
 
+	DebugText* debugText = DebugText::GetInstance();
+	assert(debugText);
+	if (!isDebugTextInitialized) {
+		debugText->Initialize();
+		isDebugTextInitialized = true;
+	}
+
 	uint32_t whiteTextureHandle = TextureManager::Load("white1x1.png");
 	mouseCircleSprite_ = Sprite::Create(
 	    whiteTextureHandle, {0.0f, 0.0f}, {0.85f, 0.76f, 1.0f, 0.90f});
@@ -61,21 +78,92 @@ void GameScene::Initialize() {
 }
 
 void GameScene::Update() {
+	UpdateMapBlocks();
 	UpdateDebugCommand();
 	UpdateCamera();
 }
 
-void GameScene::UpdateDebugCommand() {
-	if (isDebugMode_) {
-		return;
+void GameScene::InitializeMapBlocks() {
+	mapBlocks_.clear();
+	mapBlocks_.reserve(kMapBlockCount);
+	for (std::size_t index = 0; index < kMapBlockCount; ++index) {
+		SpawnMapBlock(sceneMap_.origin.x + static_cast<float>(index) * kBlockSize);
+	}
+}
+
+void GameScene::SpawnMapBlock(float positionX) {
+	auto block = std::make_unique<MapBlock>();
+	block->positionX = positionX;
+	block->positionY = sceneMap_.groundHeight;
+	block->worldTransform.Initialize();
+	block->worldTransform.scale_ = {kBlockSize, kBlockSize, kBlockSize};
+	block->worldTransform.translation_ = {
+	    block->positionX, block->positionY, sceneMap_.origin.z};
+	WorldTransformUpdate(block->worldTransform);
+	mapBlocks_.push_back(std::move(block));
+}
+
+void GameScene::UpdateMapBlocks() {
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		block->positionX -= kBlockMoveSpeed * kDeltaTime;
+
+		if (!block->isFalling && block->positionX < kFallStartX) {
+			block->isFalling = true;
+			block->verticalVelocity = 0.0f;
+		}
+
+		if (block->isFalling) {
+			block->verticalVelocity -= kGravity * kDeltaTime;
+			block->positionY += block->verticalVelocity * kDeltaTime;
+			block->worldTransform.translation_ = {
+			    block->positionX, block->positionY, sceneMap_.origin.z};
+			block->worldTransform.rotation_ = {0.0f, 0.0f, 0.0f};
+		} else if (block->positionX < kShakeStartX) {
+			block->shakeTime += kDeltaTime;
+			const float shakeX = std::sin(block->shakeTime * kShakeFrequency) * kShakeAmount;
+			const float shakeY = std::cos(block->shakeTime * kShakeFrequency * 1.37f) * kShakeAmount;
+			block->worldTransform.translation_ = {
+			    block->positionX + shakeX,
+			    block->positionY + shakeY,
+			    sceneMap_.origin.z};
+			block->worldTransform.rotation_.z = shakeX * 0.35f;
+		} else {
+			block->worldTransform.translation_ = {
+			    block->positionX, block->positionY, sceneMap_.origin.z};
+		}
+
+		WorldTransformUpdate(block->worldTransform);
 	}
 
+	const float deleteY = sceneMap_.groundHeight - kDeleteDistance;
+	const std::size_t oldCount = mapBlocks_.size();
+	mapBlocks_.erase(
+	    std::remove_if(
+	        mapBlocks_.begin(), mapBlocks_.end(),
+	        [deleteY](const std::unique_ptr<MapBlock>& block) {
+		        return block->isFalling && block->positionY < deleteY;
+	        }),
+	    mapBlocks_.end());
+
+	const std::size_t removedCount = oldCount - mapBlocks_.size();
+	for (std::size_t index = 0; index < removedCount; ++index) {
+		float frontX = sceneMap_.origin.x - kBlockSize;
+		for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+			frontX = (std::max)(frontX, block->positionX);
+		}
+		SpawnMapBlock(frontX + kBlockSize);
+	}
+}
+
+void GameScene::UpdateDebugCommand() {
 	Input* input = Input::GetInstance();
-	const BYTE expectedKey = kDebugCommand[debugCommandIndex_];
+	const std::array<BYTE, 5>& command =
+	    isDebugMode_ ? kExitDebugCommand : kEnterDebugCommand;
+	const BYTE expectedKey = command[debugCommandIndex_];
 	if (input->TriggerKey(expectedKey)) {
 		++debugCommandIndex_;
-		if (debugCommandIndex_ == kDebugCommand.size()) {
-			isDebugMode_ = true;
+		if (debugCommandIndex_ == command.size()) {
+			isDebugMode_ = !isDebugMode_;
 			debugCommandIndex_ = 0;
 		}
 		return;
@@ -87,9 +175,48 @@ void GameScene::UpdateDebugCommand() {
 			continue;
 		}
 
-		debugCommandIndex_ = key == kDebugCommand.front() ? 1 : 0;
+		debugCommandIndex_ = key == command.front() ? 1 : 0;
 		break;
 	}
+}
+
+void GameScene::DrawDebugInfo() {
+	if (!isDebugMode_) {
+		return;
+	}
+	DebugText* debugText = DebugText::GetInstance();
+	if (!debugText) {
+		return;
+	}
+
+	char cameraPositionText[128] = {};
+	char cameraRotationText[128] = {};
+	std::snprintf(
+	    cameraPositionText, sizeof(cameraPositionText),
+	    "Debug Camera Position  X: %.3f  Y: %.3f  Z: %.3f",
+	    debugCamera_.translation_.x, debugCamera_.translation_.y,
+	    debugCamera_.translation_.z);
+	constexpr float radiansToDegrees = 180.0f / std::numbers::pi_v<float>;
+	std::snprintf(
+	    cameraRotationText, sizeof(cameraRotationText),
+	    "Debug Camera Rotation  X: %.2f deg  Y: %.2f deg  Z: %.2f deg",
+	    debugCamera_.rotation_.x * radiansToDegrees,
+	    debugCamera_.rotation_.y * radiansToDegrees,
+	    debugCamera_.rotation_.z * radiansToDegrees);
+
+	debugText->Print(cameraPositionText, 10.0f, 10.0f, 1.0f);
+	debugText->Print(cameraRotationText, 10.0f, 30.0f, 1.0f);
+	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+	constexpr float hertaTextWidth = 5.0f * DebugText::kFontWidth;
+	const float hertaX =
+	    static_cast<float>(dxCommon->GetBackBufferWidth()) - hertaTextWidth - 10.0f;
+	const float hertaY =
+	    static_cast<float>(dxCommon->GetBackBufferHeight()) -
+	    static_cast<float>(DebugText::kFontHeight) - 10.0f;
+	debugText->Print("Herta", hertaX, hertaY, 1.0f);
+	Sprite::PreDraw();
+	debugText->DrawAll();
+	Sprite::PostDraw();
 }
 
 void GameScene::UpdateCamera() {
@@ -163,12 +290,22 @@ void GameScene::UpdateAxisIndicatorCamera() {
 
 void GameScene::Draw() {
 	DrawMapGrid();
+	DrawMapBlocks();
 
 	if (isDebugMode_) {
 		DrawAxisIndicator();
 	}
 
 	DrawMouseCircle();
+	DrawDebugInfo();
+}
+
+void GameScene::DrawMapBlocks() {
+	Model::PreDraw();
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		modelBlock_->Draw(block->worldTransform, GetActiveCamera());
+	}
+	Model::PostDraw();
 }
 
 void GameScene::DrawMapGrid() {
