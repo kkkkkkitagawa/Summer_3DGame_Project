@@ -95,6 +95,8 @@ bool ProjectWorldToScreen(
 
 GameScene::~GameScene() {
 	mapBlocks_.clear();
+	delete player_;
+	delete modelPlayer_;
 	delete skydome_;
 	delete modelSkydome_;
 	delete modelBlock_;
@@ -111,6 +113,17 @@ void GameScene::Initialize() {
 	modelBlock_ = Model::CreateFromOBJ("block", true);
 	assert(modelBlock_);
 	InitializeMapBlocks();
+
+	modelPlayer_ = Model::CreateFromOBJ("playerTest", true);
+	assert(modelPlayer_);
+	player_ = new Player();
+	const Vector3 playerPosition = {
+	    sceneMap_.origin.x,
+	    sceneMap_.groundHeight + kBlockSize * 0.5f +
+	        Player::kCollisionHalfSize.y + kPlayerGroundClearance,
+	    sceneMap_.origin.z,
+	};
+	player_->Initialize(modelPlayer_, playerPosition);
 
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
@@ -160,6 +173,8 @@ void GameScene::Initialize() {
 
 void GameScene::Update() {
 	skydome_->Update();
+	player_->Update();
+	UpdateMapRotationInput();
 	UpdateMapBlocks();
 	UpdateDebugCommand();
 	UpdateCamera();
@@ -179,10 +194,45 @@ void GameScene::SpawnMapBlock(float positionX) {
 	block->positionY = sceneMap_.groundHeight;
 	block->worldTransform.Initialize();
 	block->worldTransform.scale_ = {kBlockSize, kBlockSize, kBlockSize};
+	block->rotationX =
+	    static_cast<float>(mapRotationQuarterTurns_) *
+	    std::numbers::pi_v<float> * 0.5f;
+	block->targetRotationX = block->rotationX;
+	block->worldTransform.rotation_.x = block->rotationX;
 	block->worldTransform.translation_ = {
 	    block->positionX, block->positionY, sceneMap_.origin.z};
 	WorldTransformUpdate(block->worldTransform);
 	mapBlocks_.push_back(std::move(block));
+}
+
+void GameScene::AttachObstacle(
+    MapBlock& block, Model* model, BlockFace attachedFace,
+    const Vector3& size) {
+	auto obstacle = std::make_unique<Obstacle>();
+	obstacle->Initialize(
+	    model, attachedFace, &block.worldTransform, kBlockSize * 0.5f, size);
+	block.obstacles.push_back(std::move(obstacle));
+}
+
+void GameScene::UpdateMapRotationInput() {
+	Input* input = Input::GetInstance();
+	const bool rotateLeft = input->TriggerKey(DIK_A);
+	const bool rotateRight = input->TriggerKey(DIK_D);
+	if (rotateLeft == rotateRight) {
+		return;
+	}
+
+	const int turnDirection = rotateLeft ? 1 : -1;
+	mapRotationQuarterTurns_ += turnDirection;
+	const float rotationAmount =
+	    static_cast<float>(turnDirection) *
+	    std::numbers::pi_v<float> * 0.5f;
+
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		if (!block->isFalling) {
+			block->targetRotationX += rotationAmount;
+		}
+	}
 }
 
 void GameScene::UpdateMapBlocks() {
@@ -192,6 +242,17 @@ void GameScene::UpdateMapBlocks() {
 		if (!block->isFalling && block->positionX < kFallStartX) {
 			block->isFalling = true;
 			block->verticalVelocity = 0.0f;
+			block->targetRotationX = block->rotationX;
+		}
+
+		if (!block->isFalling) {
+			const float rotationStep =
+			    (std::numbers::pi_v<float> * 0.5f / kMapRotationDuration) *
+			    kDeltaTime;
+			const float rotationDifference =
+			    block->targetRotationX - block->rotationX;
+			block->rotationX += std::clamp(
+			    rotationDifference, -rotationStep, rotationStep);
 		}
 
 		if (block->isFalling) {
@@ -199,7 +260,8 @@ void GameScene::UpdateMapBlocks() {
 			block->positionY += block->verticalVelocity * kDeltaTime;
 			block->worldTransform.translation_ = {
 			    block->positionX, block->positionY, sceneMap_.origin.z};
-			block->worldTransform.rotation_ = {0.0f, 0.0f, 0.0f};
+			block->worldTransform.rotation_.x = block->rotationX;
+			block->worldTransform.rotation_.z = 0.0f;
 		} else if (block->positionX < kShakeStartX) {
 			block->shakeTime += kDeltaTime;
 			const float shakeStrength = CalculateShakeStrength(block->positionX);
@@ -212,13 +274,19 @@ void GameScene::UpdateMapBlocks() {
 			    block->positionX + shakeX,
 			    block->positionY + shakeY,
 			    sceneMap_.origin.z};
+			block->worldTransform.rotation_.x = block->rotationX;
 			block->worldTransform.rotation_.z = shakeX * 0.35f;
 		} else {
 			block->worldTransform.translation_ = {
 			    block->positionX, block->positionY, sceneMap_.origin.z};
+			block->worldTransform.rotation_.x = block->rotationX;
+			block->worldTransform.rotation_.z = 0.0f;
 		}
 
 		WorldTransformUpdate(block->worldTransform);
+		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
+			obstacle->Update();
+		}
 	}
 
 	const float deleteY = sceneMap_.groundHeight - kDeleteDistance;
@@ -284,8 +352,12 @@ void GameScene::DrawDebugInfo() {
 	}
 	DrawDebugCoordinateLabels();
 
+	char playerPositionText[64] = {};
 	char cameraPositionText[128] = {};
 	char cameraRotationText[128] = {};
+	std::snprintf(
+	    playerPositionText, sizeof(playerPositionText), "Player X: %.1f",
+	    player_->GetWorldPosition().x);
 	std::snprintf(
 	    cameraPositionText, sizeof(cameraPositionText),
 	    "Debug Camera Position  X: %.3f  Y: %.3f  Z: %.3f",
@@ -299,8 +371,9 @@ void GameScene::DrawDebugInfo() {
 	    debugCamera_.rotation_.y * radiansToDegrees,
 	    debugCamera_.rotation_.z * radiansToDegrees);
 
-	debugText->Print(cameraPositionText, 10.0f, 10.0f, 1.0f);
-	debugText->Print(cameraRotationText, 10.0f, 30.0f, 1.0f);
+	debugText->Print(playerPositionText, 10.0f, 10.0f, 1.0f);
+	debugText->Print(cameraPositionText, 10.0f, 30.0f, 1.0f);
+	debugText->Print(cameraRotationText, 10.0f, 50.0f, 1.0f);
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	constexpr float hertaTextWidth = 5.0f * DebugText::kFontWidth;
 	const float hertaX =
@@ -438,8 +511,10 @@ void GameScene::Draw() {
 
 	DrawMapGrid();
 	DrawMapBlocks();
+	DrawPlayer();
 
 	if (isDebugMode_) {
+		DrawPlayerCollisionBox();
 		DrawAxisIndicator();
 	}
 
@@ -451,8 +526,44 @@ void GameScene::DrawMapBlocks() {
 	Model::PreDraw();
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 		modelBlock_->Draw(block->worldTransform, GetActiveCamera());
+		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
+			obstacle->Draw(GetActiveCamera());
+		}
 	}
 	Model::PostDraw();
+}
+
+void GameScene::DrawPlayer() {
+	Model::PreDraw();
+	player_->Draw(GetActiveCamera());
+	Model::PostDraw();
+}
+
+void GameScene::DrawPlayerCollisionBox() {
+	primitiveDrawer_->SetCamera(&GetActiveCamera());
+	const AABB aabb = player_->GetAABB();
+	const Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+	const Vector3 corners[8] = {
+	    {aabb.min.x, aabb.min.y, aabb.min.z},
+	    {aabb.max.x, aabb.min.y, aabb.min.z},
+	    {aabb.max.x, aabb.max.y, aabb.min.z},
+	    {aabb.min.x, aabb.max.y, aabb.min.z},
+	    {aabb.min.x, aabb.min.y, aabb.max.z},
+	    {aabb.max.x, aabb.min.y, aabb.max.z},
+	    {aabb.max.x, aabb.max.y, aabb.max.z},
+	    {aabb.min.x, aabb.max.y, aabb.max.z},
+	};
+	constexpr int edgeIndices[12][2] = {
+	    {0, 1}, {1, 2}, {2, 3}, {3, 0},
+	    {4, 5}, {5, 6}, {6, 7}, {7, 4},
+	    {0, 4}, {1, 5}, {2, 6}, {3, 7},
+	};
+
+	for (const auto& edge : edgeIndices) {
+		primitiveDrawer_->DrawLine3d(
+		    corners[edge[0]], corners[edge[1]], color);
+	}
 }
 
 void GameScene::DrawMapGrid() {

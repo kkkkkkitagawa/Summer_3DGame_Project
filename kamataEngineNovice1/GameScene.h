@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameData.h"
+#include "Obstacle.h"
 #include "Player.h"
 #include "Skydome.h"
 
@@ -24,12 +25,19 @@ private:
 		float positionY = 0.0f;
 		float verticalVelocity = 0.0f;
 		float shakeTime = 0.0f;
+		float rotationX = 0.0f;
+		float targetRotationX = 0.0f;
 		bool isFalling = false;
+		std::vector<std::unique_ptr<Obstacle>> obstacles;
 	};
 
 	void InitializeMapBlocks();
+	void UpdateMapRotationInput();
 	void UpdateMapBlocks();
 	void SpawnMapBlock(float positionX);
+	void AttachObstacle(
+	    MapBlock& block, KamataEngine::Model* model, BlockFace attachedFace,
+	    const KamataEngine::Vector3& size);
 	float CalculateShakeStrength(float positionX) const;
 	void DrawMapBlocks();
 	void UpdateDebugCommand();
@@ -38,6 +46,8 @@ private:
 	void UpdateAxisIndicatorCamera();
 	void DrawMapGrid();
 	void DrawDebugCoordinateLabels();
+	void DrawPlayer();
+	void DrawPlayerCollisionBox();
 	void DrawAxisIndicator();
 	void DrawMouseCircle();
 	const KamataEngine::Camera& GetActiveCamera() const;
@@ -45,7 +55,9 @@ private:
 	KamataEngine::Model* modelAxis_ = nullptr;
 	KamataEngine::Model* modelBlock_ = nullptr;
 	KamataEngine::Model* modelSkydome_ = nullptr;
+	KamataEngine::Model* modelPlayer_ = nullptr;
 	Skydome* skydome_ = nullptr;
+	Player* player_ = nullptr;
 	KamataEngine::Sprite* mouseCircleSprite_ = nullptr;
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
@@ -63,6 +75,7 @@ private:
 
 	bool isDebugMode_ = false;
 	std::size_t debugCommandIndex_ = 0;
+	int mapRotationQuarterTurns_ = 0;
 
 	static inline const std::array<BYTE, 5> kEnterDebugCommand = {
 	    DIK_L,
@@ -91,6 +104,8 @@ private:
 	static inline const float kPixelsPerWorldUnit = 32.0f;
 	static inline const float kBlockSizePixels = 32.0f;
 	static inline const float kBlockSize = kBlockSizePixels / kPixelsPerWorldUnit;
+	static inline const float kPlayerGroundClearance =
+	    1.0f / kPixelsPerWorldUnit;
 	static inline const int kNegativeCoordinateCount = 5;
 	static inline const float kRulerHeightPixels = 18.0f;
 	static inline const float kRulerHeight =
@@ -102,6 +117,7 @@ private:
 	static inline const float kCoordinateTickHalfLength =
 	    6.0f / kPixelsPerWorldUnit;
 	static inline const float kBlockMoveSpeed = 2.0f;
+	static inline const float kMapRotationDuration = 0.18f;
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;
