@@ -4,8 +4,9 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <numbers>
 
 using namespace KamataEngine;
@@ -17,16 +18,96 @@ bool IsModifierKey(BYTE key) {
 	return key == DIK_LSHIFT || key == DIK_RSHIFT || key == DIK_LCONTROL ||
 	       key == DIK_RCONTROL || key == DIK_LALT || key == DIK_RALT;
 }
+
+bool ProjectWorldToScreen(
+    const Vector3& worldPosition, const Camera& camera, Vector2& screenPosition) {
+	const Vector4 world = {
+	    worldPosition.x, worldPosition.y, worldPosition.z, 1.0f};
+	Vector4 view = {};
+	Vector4 clip = {};
+
+	for (int column = 0; column < 4; ++column) {
+		const float value =
+		    world.x * camera.matView.m[0][column] +
+		    world.y * camera.matView.m[1][column] +
+		    world.z * camera.matView.m[2][column] +
+		    world.w * camera.matView.m[3][column];
+		switch (column) {
+		case 0:
+			view.x = value;
+			break;
+		case 1:
+			view.y = value;
+			break;
+		case 2:
+			view.z = value;
+			break;
+		default:
+			view.w = value;
+			break;
+		}
+	}
+
+	for (int column = 0; column < 4; ++column) {
+		const float value =
+		    view.x * camera.matProjection.m[0][column] +
+		    view.y * camera.matProjection.m[1][column] +
+		    view.z * camera.matProjection.m[2][column] +
+		    view.w * camera.matProjection.m[3][column];
+		switch (column) {
+		case 0:
+			clip.x = value;
+			break;
+		case 1:
+			clip.y = value;
+			break;
+		case 2:
+			clip.z = value;
+			break;
+		default:
+			clip.w = value;
+			break;
+		}
+	}
+
+	if (clip.w <= 0.0f) {
+		return false;
+	}
+
+	const float ndcX = clip.x / clip.w;
+	const float ndcY = clip.y / clip.w;
+	const float ndcZ = clip.z / clip.w;
+	if (ndcX < -1.0f || ndcX > 1.0f || ndcY < -1.0f || ndcY > 1.0f ||
+	    ndcZ < 0.0f || ndcZ > 1.0f) {
+		return false;
+	}
+
+	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+	const float width = static_cast<float>(dxCommon->GetBackBufferWidth());
+	const float height = static_cast<float>(dxCommon->GetBackBufferHeight());
+	screenPosition = {
+	    (ndcX + 1.0f) * 0.5f * width,
+	    (1.0f - ndcY) * 0.5f * height,
+	};
+	return true;
+}
 } // namespace
 
 GameScene::~GameScene() {
 	mapBlocks_.clear();
+	delete skydome_;
+	delete modelSkydome_;
 	delete modelBlock_;
 	delete modelAxis_;
 	delete mouseCircleSprite_;
 }
 
 void GameScene::Initialize() {
+	modelSkydome_ = Model::CreateFromOBJ("SkyDome", true);
+	assert(modelSkydome_);
+	skydome_ = new Skydome();
+	skydome_->Initialize(modelSkydome_);
+
 	modelBlock_ = Model::CreateFromOBJ("block", true);
 	assert(modelBlock_);
 	InitializeMapBlocks();
@@ -78,6 +159,7 @@ void GameScene::Initialize() {
 }
 
 void GameScene::Update() {
+	skydome_->Update();
 	UpdateMapBlocks();
 	UpdateDebugCommand();
 	UpdateCamera();
@@ -200,6 +282,7 @@ void GameScene::DrawDebugInfo() {
 	if (!debugText) {
 		return;
 	}
+	DrawDebugCoordinateLabels();
 
 	char cameraPositionText[128] = {};
 	char cameraRotationText[128] = {};
@@ -229,6 +312,54 @@ void GameScene::DrawDebugInfo() {
 	Sprite::PreDraw();
 	debugText->DrawAll();
 	Sprite::PostDraw();
+}
+
+void GameScene::DrawDebugCoordinateLabels() {
+	DebugText* debugText = DebugText::GetInstance();
+	const Camera& camera = GetActiveCamera();
+
+	Vector2 originScreenPosition = {};
+	const Vector3 originLabelPosition = {
+	    sceneMap_.origin.x,
+	    sceneMap_.groundHeight + kOriginLabelHeight,
+	    sceneMap_.origin.z,
+	};
+	if (ProjectWorldToScreen(originLabelPosition, camera, originScreenPosition)) {
+		char originText[48] = {};
+		std::snprintf(
+		    originText, sizeof(originText), "ORIGIN (%.0f,%.0f,%.0f)",
+		    sceneMap_.origin.x, sceneMap_.groundHeight, sceneMap_.origin.z);
+		const float textWidth =
+		    static_cast<float>(std::strlen(originText)) * DebugText::kFontWidth;
+		debugText->Print(
+		    originText, originScreenPosition.x - textWidth * 0.5f,
+		    originScreenPosition.y);
+	}
+
+	for (
+	    int index = -kNegativeCoordinateCount;
+	    index < static_cast<int>(kMapBlockCount); ++index) {
+		const float coordinateX =
+		    sceneMap_.origin.x + static_cast<float>(index) * kBlockSize;
+		const Vector3 labelPosition = {
+		    coordinateX,
+		    sceneMap_.groundHeight + kCoordinateLabelHeight,
+		    sceneMap_.origin.z,
+		};
+		Vector2 screenPosition = {};
+		if (!ProjectWorldToScreen(labelPosition, camera, screenPosition)) {
+			continue;
+		}
+
+		char coordinateText[16] = {};
+		std::snprintf(
+		    coordinateText, sizeof(coordinateText), "X=%.0f", coordinateX);
+		const float textWidth =
+		    static_cast<float>(std::strlen(coordinateText)) * DebugText::kFontWidth;
+		debugText->Print(
+		    coordinateText, screenPosition.x - textWidth * 0.5f,
+		    screenPosition.y);
+	}
 }
 
 void GameScene::UpdateCamera() {
@@ -301,6 +432,10 @@ void GameScene::UpdateAxisIndicatorCamera() {
 }
 
 void GameScene::Draw() {
+	Model::PreDraw();
+	skydome_->Draw(GetActiveCamera());
+	Model::PostDraw();
+
 	DrawMapGrid();
 	DrawMapBlocks();
 
@@ -343,6 +478,35 @@ void GameScene::DrawMapGrid() {
 		                   static_cast<float>(sceneMap_.divisionZ);
 		const float z = minZ + (maxZ - minZ) * rate;
 		primitiveDrawer_->DrawLine3d({minX, gridY, z}, {maxX, gridY, z}, gridColor);
+	}
+
+	if (isDebugMode_) {
+		const float originX = sceneMap_.origin.x;
+		const float groundY = sceneMap_.groundHeight;
+		const float rulerY = groundY + kRulerHeight;
+		const float originZ = sceneMap_.origin.z;
+		const float startX =
+		    originX - static_cast<float>(kNegativeCoordinateCount) * kBlockSize;
+		const float endX =
+		    originX + static_cast<float>(kMapBlockCount - 1) * kBlockSize;
+		const Vector4 xAxisColor = {1.0f, 0.28f, 0.20f, 1.0f};
+		const Vector4 tickColor = {1.0f, 0.82f, 0.18f, 1.0f};
+
+		primitiveDrawer_->DrawLine3d(
+		    {startX, rulerY, originZ}, {endX, rulerY, originZ}, xAxisColor);
+		primitiveDrawer_->DrawLine3d(
+		    {originX, groundY, originZ}, {originX, rulerY, originZ}, xAxisColor);
+
+		for (
+		    int index = -kNegativeCoordinateCount;
+		    index < static_cast<int>(kMapBlockCount); ++index) {
+			const float coordinateX =
+			    originX + static_cast<float>(index) * kBlockSize;
+			primitiveDrawer_->DrawLine3d(
+			    {coordinateX, rulerY, originZ - kCoordinateTickHalfLength},
+			    {coordinateX, rulerY, originZ + kCoordinateTickHalfLength},
+			    tickColor);
+		}
 	}
 
 }

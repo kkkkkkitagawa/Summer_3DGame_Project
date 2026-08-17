@@ -171,12 +171,14 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp" />
     <ClCompile Include="GameScene.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Skydome.cpp" />
     <ClCompile Include="WorldTransformUpdate.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameData.h" />
     <ClInclude Include="GameScene.h" />
     <ClInclude Include="Player.h" />
+    <ClInclude Include="Skydome.h" />
     <ClInclude Include="WorldTransformUpdate.h" />
     <ClInclude Include="..\DirectXGame\3d\Camera.h" />
     <ClInclude Include="C:\KamataEngine\DirectXGame\base\StringUtility.h" />

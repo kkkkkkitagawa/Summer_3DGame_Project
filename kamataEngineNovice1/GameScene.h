@@ -2,6 +2,7 @@
 
 #include "GameData.h"
 #include "Player.h"
+#include "Skydome.h"
 
 #include <array>
 #include <cstddef>
@@ -36,12 +37,15 @@ private:
 	void UpdateCamera();
 	void UpdateAxisIndicatorCamera();
 	void DrawMapGrid();
+	void DrawDebugCoordinateLabels();
 	void DrawAxisIndicator();
 	void DrawMouseCircle();
 	const KamataEngine::Camera& GetActiveCamera() const;
 
 	KamataEngine::Model* modelAxis_ = nullptr;
 	KamataEngine::Model* modelBlock_ = nullptr;
+	KamataEngine::Model* modelSkydome_ = nullptr;
+	Skydome* skydome_ = nullptr;
 	KamataEngine::Sprite* mouseCircleSprite_ = nullptr;
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
@@ -87,6 +91,16 @@ private:
 	static inline const float kPixelsPerWorldUnit = 32.0f;
 	static inline const float kBlockSizePixels = 32.0f;
 	static inline const float kBlockSize = kBlockSizePixels / kPixelsPerWorldUnit;
+	static inline const int kNegativeCoordinateCount = 5;
+	static inline const float kRulerHeightPixels = 18.0f;
+	static inline const float kRulerHeight =
+	    kRulerHeightPixels / kPixelsPerWorldUnit;
+	static inline const float kCoordinateLabelHeight =
+	    kRulerHeight + 4.0f / kPixelsPerWorldUnit;
+	static inline const float kOriginLabelHeight =
+	    kRulerHeight + 24.0f / kPixelsPerWorldUnit;
+	static inline const float kCoordinateTickHalfLength =
+	    6.0f / kPixelsPerWorldUnit;
 	static inline const float kBlockMoveSpeed = 2.0f;
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
