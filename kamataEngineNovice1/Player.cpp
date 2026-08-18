@@ -2,6 +2,7 @@
 
 #include "WorldTransformUpdate.h"
 
+#include <algorithm>
 #include <cassert>
 
 void Player::Initialize(
@@ -15,7 +16,11 @@ void Player::Initialize(
 	WorldTransformUpdate(worldTransform_);
 }
 
-void Player::Update() {
+void Player::Update(
+    float forwardSpeed, float maximumPositionX, float deltaTime) {
+	worldTransform_.translation_.x = (std::min)(
+	    maximumPositionX,
+	    worldTransform_.translation_.x + forwardSpeed * deltaTime);
 	WorldTransformUpdate(worldTransform_);
 }
 

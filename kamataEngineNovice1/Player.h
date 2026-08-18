@@ -6,7 +6,7 @@ class Player {
 public:
 	void Initialize(
 	    KamataEngine::Model* model, const KamataEngine::Vector3& position);
-	void Update();
+	void Update(float forwardSpeed, float maximumPositionX, float deltaTime);
 	void Draw(const KamataEngine::Camera& camera) const;
 
 	KamataEngine::Vector3 GetWorldPosition() const;

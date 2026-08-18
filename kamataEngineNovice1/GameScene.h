@@ -94,6 +94,7 @@ private:
 	bool hasSpawnedFirstObstacle_ = false;
 	float blockedRotationFeedbackTime_ = 0.0f;
 	int blockedRotationFeedbackDirection_ = 0;
+	float mapMoveSpeed_ = 0.0f;
 
 	static inline const std::array<BYTE, 5> kEnterDebugCommand = {
 	    DIK_L,
@@ -134,7 +135,7 @@ private:
 	    kRulerHeight + 24.0f / kPixelsPerWorldUnit;
 	static inline const float kCoordinateTickHalfLength =
 	    6.0f / kPixelsPerWorldUnit;
-	static inline const float kBlockMoveSpeed = 2.0f;
+	static inline const float kInitialMapMoveSpeed = 2.0f;
 	static inline const float kMapRotationDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackAngle =

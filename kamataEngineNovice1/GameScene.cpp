@@ -107,6 +107,8 @@ GameScene::~GameScene() {
 }
 
 void GameScene::Initialize() {
+	mapMoveSpeed_ = kInitialMapMoveSpeed;
+
 	modelSkydome_ = Model::CreateFromOBJ("SkyDome", true);
 	assert(modelSkydome_);
 	skydome_ = new Skydome();
@@ -178,7 +180,8 @@ void GameScene::Initialize() {
 
 void GameScene::Update() {
 	skydome_->Update();
-	player_->Update();
+	player_->Update(
+	    kInitialMapMoveSpeed, sceneMap_.origin.x, kDeltaTime);
 	UpdateMapRotationInput();
 	UpdateMapBlocks();
 	ResolvePlayerObstacleCollisions();
@@ -378,7 +381,7 @@ void GameScene::UpdateMapBlocks() {
 	const float blockedRotationOffset = CalculateBlockedRotationOffset();
 
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
-		block->positionX -= kBlockMoveSpeed * kDeltaTime;
+		block->positionX -= mapMoveSpeed_ * kDeltaTime;
 
 		bool startedFalling = false;
 		if (!block->isFalling && block->positionX < kFallStartX) {
@@ -449,7 +452,7 @@ void GameScene::UpdateMapBlocks() {
 			obstacle->Update(kDeltaTime, kGravity);
 			if (startedFalling) {
 				obstacle->DetachAndFall(
-				    {-kBlockMoveSpeed, block->verticalVelocity, 0.0f},
+				    {-mapMoveSpeed_, block->verticalVelocity, 0.0f},
 				    kObstacleDetachRepulsionSpeed);
 				detachedObstacles_.push_back(std::move(obstacle));
 			}
