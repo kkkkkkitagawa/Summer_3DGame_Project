@@ -9,22 +9,56 @@ using namespace KamataEngine;
 
 void Obstacle::Initialize(
     Model* model, BlockFace attachedFace, WorldTransform* parent,
-    float blockHalfSize, const Vector3& size) {
+    float blockHalfSize, const Vector3& size,
+    ObstacleInteractionRules interactionRules) {
 	assert(model);
 	assert(parent);
 	assert(size.x > 0.0f && size.y > 0.0f && size.z > 0.0f);
 
 	model_ = model;
 	attachedFace_ = attachedFace;
+	interactionRules_ = interactionRules;
 	worldTransform_.Initialize();
 	worldTransform_.parent_ = parent;
-	worldTransform_.scale_ = size;
+	// Resources/cube has local bounds from -1 to +1 on every axis.
+	worldTransform_.scale_ = {size.x * 0.5f, size.y * 0.5f, size.z * 0.5f};
 	worldTransform_.translation_ =
 	    CalculateLocalPosition(attachedFace, blockHalfSize, size);
 	WorldTransformUpdate(worldTransform_);
 }
 
-void Obstacle::Update() {
+void Obstacle::Update(float deltaTime, float gravity) {
+	if (isFalling_) {
+		velocity_.y -= gravity * deltaTime;
+		worldTransform_.translation_.x += velocity_.x * deltaTime;
+		worldTransform_.translation_.y += velocity_.y * deltaTime;
+		worldTransform_.translation_.z += velocity_.z * deltaTime;
+	}
+	WorldTransformUpdate(worldTransform_);
+}
+
+void Obstacle::DetachAndFall(
+    const Vector3& inheritedVelocity, float repulsionSpeed) {
+	if (!IsAttached()) {
+		return;
+	}
+
+	const WorldTransform* parent = worldTransform_.parent_;
+	Vector3 outwardNormal = MathUtility::TransformNormal(
+	    GetFaceNormal(attachedFace_), parent->matWorld_);
+	MathUtility::Normalize(outwardNormal);
+	const Vector3 worldPosition = GetWorldPosition();
+
+	worldTransform_.parent_ = nullptr;
+	worldTransform_.translation_ = worldPosition;
+	worldTransform_.rotation_ = parent->rotation_;
+	velocity_ = {
+	    inheritedVelocity.x + outwardNormal.x * repulsionSpeed,
+	    inheritedVelocity.y + outwardNormal.y * repulsionSpeed,
+	    inheritedVelocity.z + outwardNormal.z * repulsionSpeed,
+	};
+	isCollisionEnabled_ = false;
+	isFalling_ = true;
 	WorldTransformUpdate(worldTransform_);
 }
 
@@ -33,7 +67,31 @@ void Obstacle::Draw(const Camera& camera) const {
 }
 
 AABB Obstacle::GetAABB() const {
-	constexpr float halfUnit = 0.5f;
+	return CalculateAABB(worldTransform_.matWorld_);
+}
+
+AABB Obstacle::GetAABBForParentTransform(
+    const Matrix4x4& parentTransform) const {
+	Matrix4x4 localTransform =
+	    MathUtility::MakeScaleMatrix(worldTransform_.scale_);
+	localTransform = MathUtility::operator*(
+	    localTransform,
+	    MathUtility::MakeRotateXMatrix(worldTransform_.rotation_.x));
+	localTransform = MathUtility::operator*(
+	    localTransform,
+	    MathUtility::MakeRotateYMatrix(worldTransform_.rotation_.y));
+	localTransform = MathUtility::operator*(
+	    localTransform,
+	    MathUtility::MakeRotateZMatrix(worldTransform_.rotation_.z));
+	localTransform = MathUtility::operator*(
+	    localTransform,
+	    MathUtility::MakeTranslateMatrix(worldTransform_.translation_));
+	return CalculateAABB(
+	    MathUtility::operator*(localTransform, parentTransform));
+}
+
+AABB Obstacle::CalculateAABB(const Matrix4x4& worldTransform) const {
+	constexpr float halfUnit = 1.0f;
 	const Vector3 localCorners[8] = {
 	    {-halfUnit, -halfUnit, -halfUnit},
 	    {halfUnit, -halfUnit, -halfUnit},
@@ -46,11 +104,11 @@ AABB Obstacle::GetAABB() const {
 	};
 
 	Vector3 transformedCorner =
-	    MathUtility::TransformCoord(localCorners[0], worldTransform_.matWorld_);
+	    MathUtility::TransformCoord(localCorners[0], worldTransform);
 	AABB result = {transformedCorner, transformedCorner};
 	for (std::size_t index = 1; index < 8; ++index) {
 		transformedCorner = MathUtility::TransformCoord(
-		    localCorners[index], worldTransform_.matWorld_);
+		    localCorners[index], worldTransform);
 		result.min.x = (std::min)(result.min.x, transformedCorner.x);
 		result.min.y = (std::min)(result.min.y, transformedCorner.y);
 		result.min.z = (std::min)(result.min.z, transformedCorner.z);
@@ -59,6 +117,36 @@ AABB Obstacle::GetAABB() const {
 		result.max.z = (std::max)(result.max.z, transformedCorner.z);
 	}
 	return result;
+}
+
+ObstacleSurfaceRelation Obstacle::GetSurfaceRelation(
+    float parentRotationX, const Vector3& playerSurfaceNormal) const {
+	const Matrix4x4 logicalRotation =
+	    MathUtility::MakeRotateXMatrix(parentRotationX);
+	Vector3 obstacleNormal = MathUtility::TransformNormal(
+	    GetFaceNormal(attachedFace_), logicalRotation);
+	Vector3 normalizedPlayerNormal = playerSurfaceNormal;
+	MathUtility::Normalize(obstacleNormal);
+	MathUtility::Normalize(normalizedPlayerNormal);
+	const float alignment =
+	    MathUtility::Dot(obstacleNormal, normalizedPlayerNormal);
+	if (alignment > 0.9f) {
+		return ObstacleSurfaceRelation::PlayerFace;
+	}
+	if (alignment < -0.9f) {
+		return ObstacleSurfaceRelation::OppositeFace;
+	}
+	return obstacleNormal.z >= 0.0f
+	           ? ObstacleSurfaceRelation::PositiveSide
+	           : ObstacleSurfaceRelation::NegativeSide;
+}
+
+Vector3 Obstacle::GetWorldPosition() const {
+	return {
+	    worldTransform_.matWorld_.m[3][0],
+	    worldTransform_.matWorld_.m[3][1],
+	    worldTransform_.matWorld_.m[3][2],
+	};
 }
 
 Vector3 Obstacle::CalculateLocalPosition(
@@ -72,6 +160,20 @@ Vector3 Obstacle::CalculateLocalPosition(
 		return {0.0f, 0.0f, blockHalfSize + size.z * 0.5f};
 	case BlockFace::Back:
 		return {0.0f, 0.0f, -(blockHalfSize + size.z * 0.5f)};
+	}
+	return {};
+}
+
+Vector3 Obstacle::GetFaceNormal(BlockFace attachedFace) {
+	switch (attachedFace) {
+	case BlockFace::Top:
+		return {0.0f, 1.0f, 0.0f};
+	case BlockFace::Bottom:
+		return {0.0f, -1.0f, 0.0f};
+	case BlockFace::Front:
+		return {0.0f, 0.0f, 1.0f};
+	case BlockFace::Back:
+		return {0.0f, 0.0f, -1.0f};
 	}
 	return {};
 }

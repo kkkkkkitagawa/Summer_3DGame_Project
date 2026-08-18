@@ -34,3 +34,8 @@ KamataEngine::Vector3 Player::GetWorldPosition() const {
 AABB Player::GetAABB() const {
 	return MakeAABB(GetWorldPosition(), kCollisionHalfSize);
 }
+
+void Player::SetPositionX(float positionX) {
+	worldTransform_.translation_.x = positionX;
+	WorldTransformUpdate(worldTransform_);
+}

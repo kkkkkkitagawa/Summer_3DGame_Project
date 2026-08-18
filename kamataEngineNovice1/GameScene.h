@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <numbers>
 #include <vector>
 
 class GameScene {
@@ -27,17 +28,29 @@ private:
 		float shakeTime = 0.0f;
 		float rotationX = 0.0f;
 		float targetRotationX = 0.0f;
+		float collisionRotationX = 0.0f;
 		bool isFalling = false;
 		std::vector<std::unique_ptr<Obstacle>> obstacles;
 	};
 
 	void InitializeMapBlocks();
 	void UpdateMapRotationInput();
+	bool IsMapRotationBlocked(int turnDirection) const;
+	void StartBlockedRotationFeedback(int turnDirection);
+	float CalculateBlockedRotationOffset() const;
 	void UpdateMapBlocks();
-	void SpawnMapBlock(float positionX);
+	void UpdateDetachedObstacles();
+	void ResolvePlayerObstacleCollisions();
+	void SpawnMapBlock(float positionX, bool canSpawnObstacle);
 	void AttachObstacle(
 	    MapBlock& block, KamataEngine::Model* model, BlockFace attachedFace,
 	    const KamataEngine::Vector3& size);
+	BlockFace FindPlayerFacingBlockFace(const MapBlock& block) const;
+	KamataEngine::Matrix4x4 CreateMapBlockLogicalTransform(
+	    const MapBlock& block, float rotationX) const;
+	AABB GetObstacleLogicalAABB(
+	    const MapBlock& block, const Obstacle& obstacle,
+	    float rotationX) const;
 	float CalculateShakeStrength(float positionX) const;
 	void DrawMapBlocks();
 	void UpdateDebugCommand();
@@ -56,11 +69,13 @@ private:
 	KamataEngine::Model* modelBlock_ = nullptr;
 	KamataEngine::Model* modelSkydome_ = nullptr;
 	KamataEngine::Model* modelPlayer_ = nullptr;
+	KamataEngine::Model* modelObstacle_ = nullptr;
 	Skydome* skydome_ = nullptr;
 	Player* player_ = nullptr;
 	KamataEngine::Sprite* mouseCircleSprite_ = nullptr;
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
+	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
@@ -76,6 +91,9 @@ private:
 	bool isDebugMode_ = false;
 	std::size_t debugCommandIndex_ = 0;
 	int mapRotationQuarterTurns_ = 0;
+	bool hasSpawnedFirstObstacle_ = false;
+	float blockedRotationFeedbackTime_ = 0.0f;
+	int blockedRotationFeedbackDirection_ = 0;
 
 	static inline const std::array<BYTE, 5> kEnterDebugCommand = {
 	    DIK_L,
@@ -118,6 +136,20 @@ private:
 	    6.0f / kPixelsPerWorldUnit;
 	static inline const float kBlockMoveSpeed = 2.0f;
 	static inline const float kMapRotationDuration = 0.18f;
+	static inline const float kBlockedRotationFeedbackDuration = 0.18f;
+	static inline const float kBlockedRotationFeedbackAngle =
+	    15.0f * std::numbers::pi_v<float> / 180.0f;
+	static inline const KamataEngine::Vector3 kObstacleSize = {
+	    1.0f,
+	    1.0f,
+	    1.0f,
+	};
+	static inline const KamataEngine::Vector3 kPlayerSurfaceNormal = {
+	    0.0f,
+	    1.0f,
+	    0.0f,
+	};
+	static inline const float kObstacleDetachRepulsionSpeed = 1.5f;
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;

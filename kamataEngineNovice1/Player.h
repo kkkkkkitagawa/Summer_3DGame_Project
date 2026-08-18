@@ -11,6 +11,7 @@ public:
 
 	KamataEngine::Vector3 GetWorldPosition() const;
 	AABB GetAABB() const;
+	void SetPositionX(float positionX);
 
 	static inline const KamataEngine::Vector3 kCollisionHalfSize = {
 	    0.5f,
