@@ -116,6 +116,8 @@ void GameScene::Initialize() {
 
 	modelBlock_ = Model::CreateFromOBJ("block", true);
 	assert(modelBlock_);
+	modelObstacle_ = Model::CreateFromOBJ("cube", true);
+	assert(modelObstacle_);
 	InitializeMapBlocks();
 
 	modelPlayer_ = Model::CreateFromOBJ("playerTest", true);
@@ -128,9 +130,6 @@ void GameScene::Initialize() {
 	    sceneMap_.origin.z,
 	};
 	player_->Initialize(modelPlayer_, playerPosition);
-
-	modelObstacle_ = Model::CreateFromOBJ("cube", true);
-	assert(modelObstacle_);
 
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
@@ -192,13 +191,16 @@ void GameScene::Update() {
 void GameScene::InitializeMapBlocks() {
 	mapBlocks_.clear();
 	mapBlocks_.reserve(kMapBlockCount);
+	levelGenerator_.Reset();
 	for (std::size_t index = 0; index < kMapBlockCount; ++index) {
 		SpawnMapBlock(
-		    sceneMap_.origin.x + static_cast<float>(index) * kBlockSize, false);
+		    sceneMap_.origin.x + static_cast<float>(index) * kBlockSize,
+		    levelGenerator_.CreateInitialBlockPlan());
 	}
 }
 
-void GameScene::SpawnMapBlock(float positionX, bool canSpawnObstacle) {
+void GameScene::SpawnMapBlock(
+    float positionX, const MapBlockSpawnPlan& spawnPlan) {
 	auto block = std::make_unique<MapBlock>();
 	block->positionX = positionX;
 	block->positionY = sceneMap_.groundHeight;
@@ -213,50 +215,22 @@ void GameScene::SpawnMapBlock(float positionX, bool canSpawnObstacle) {
 	block->worldTransform.translation_ = {
 	    block->positionX, block->positionY, sceneMap_.origin.z};
 	WorldTransformUpdate(block->worldTransform);
-	if (canSpawnObstacle && !hasSpawnedFirstObstacle_) {
+	for (const ObstacleSpawnPlan& obstaclePlan : spawnPlan.obstacles) {
 		AttachObstacle(
-		    *block, modelObstacle_, FindPlayerFacingBlockFace(*block),
-		    kObstacleSize);
-		hasSpawnedFirstObstacle_ = true;
+		    *block, modelObstacle_, obstaclePlan.attachedFace,
+		    obstaclePlan.size, obstaclePlan.interactionRules);
 	}
 	mapBlocks_.push_back(std::move(block));
 }
 
 void GameScene::AttachObstacle(
     MapBlock& block, Model* model, BlockFace attachedFace,
-    const Vector3& size) {
+    const Vector3& size, ObstacleInteractionRules interactionRules) {
 	auto obstacle = std::make_unique<Obstacle>();
 	obstacle->Initialize(
-	    model, attachedFace, &block.worldTransform, kBlockSize * 0.5f, size);
+	    model, attachedFace, &block.worldTransform, kBlockSize * 0.5f, size,
+	    interactionRules);
 	block.obstacles.push_back(std::move(obstacle));
-}
-
-BlockFace GameScene::FindPlayerFacingBlockFace(const MapBlock& block) const {
-	constexpr BlockFace faces[] = {
-	    BlockFace::Top,
-	    BlockFace::Bottom,
-	    BlockFace::Front,
-	    BlockFace::Back,
-	};
-	constexpr Vector3 localNormals[] = {
-	    {0.0f, 1.0f, 0.0f},
-	    {0.0f, -1.0f, 0.0f},
-	    {0.0f, 0.0f, 1.0f},
-	    {0.0f, 0.0f, -1.0f},
-	};
-
-	BlockFace playerFacingFace = faces[0];
-	float highestWorldY = -1.0f;
-	for (std::size_t index = 0; index < std::size(faces); ++index) {
-		Vector3 worldNormal = MathUtility::TransformNormal(
-		    localNormals[index], block.worldTransform.matWorld_);
-		MathUtility::Normalize(worldNormal);
-		if (worldNormal.y > highestWorldY) {
-			highestWorldY = worldNormal.y;
-			playerFacingFace = faces[index];
-		}
-	}
-	return playerFacingFace;
 }
 
 Matrix4x4 GameScene::CreateMapBlockLogicalTransform(
@@ -291,13 +265,16 @@ void GameScene::UpdateMapRotationInput() {
 	}
 
 	const int turnDirection = rotateLeft ? 1 : -1;
-	if (IsMapRotationBlocked(turnDirection)) {
+	if (IsMapRotationDestinationBlocked(turnDirection, 1) &&
+	    !CanRotateThroughConnectedObstacle(turnDirection)) {
 		StartBlockedRotationFeedback(turnDirection);
 		return;
 	}
 
 	blockedRotationFeedbackTime_ = 0.0f;
 	blockedRotationFeedbackDirection_ = 0;
+	// 同じブロックの多面障害物を通過するときも、1入力につき90度だけ進める。
+	// 移動先にも障害物があれば引き続き押され、次の入力で別の面へ進める。
 	mapRotationQuarterTurns_ += turnDirection;
 	const float rotationAmount =
 	    static_cast<float>(turnDirection) *
@@ -306,14 +283,17 @@ void GameScene::UpdateMapRotationInput() {
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 		if (!block->isFalling) {
 			block->targetRotationX += rotationAmount;
+			// ゲーム判定は入力時に目的面へ切り替え、表示だけを補間する。
+			block->collisionRotationX = block->targetRotationX;
 		}
 	}
 }
 
-bool GameScene::IsMapRotationBlocked(int turnDirection) const {
+bool GameScene::IsMapRotationDestinationBlocked(
+    int turnDirection, int quarterTurnCount) const {
 	const AABB playerAABB = player_->GetAABB();
 	const float rotationAmount =
-	    static_cast<float>(turnDirection) *
+	    static_cast<float>(turnDirection * quarterTurnCount) *
 	    std::numbers::pi_v<float> * 0.5f;
 
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
@@ -329,16 +309,8 @@ bool GameScene::IsMapRotationBlocked(int turnDirection) const {
 				continue;
 			}
 
-			const ObstacleSurfaceRelation currentRelation =
-			    obstacle->GetSurfaceRelation(
-			        block->targetRotationX, kPlayerSurfaceNormal);
-			if (currentRelation != ObstacleSurfaceRelation::PositiveSide &&
-			    currentRelation != ObstacleSurfaceRelation::NegativeSide) {
-				continue;
-			}
-
 			const AABB obstacleAABB = GetObstacleLogicalAABB(
-			    *block, *obstacle, block->targetRotationX);
+			    *block, *obstacle, block->collisionRotationX);
 			const bool overlapsPlayerX =
 			    obstacleAABB.min.x <= playerAABB.max.x &&
 			    obstacleAABB.max.x >= playerAABB.min.x;
@@ -348,11 +320,69 @@ bool GameScene::IsMapRotationBlocked(int turnDirection) const {
 
 			const ObstacleSurfaceRelation proposedRelation =
 			    obstacle->GetSurfaceRelation(
-			        block->targetRotationX + rotationAmount,
+			        block->collisionRotationX + rotationAmount,
 			        kPlayerSurfaceNormal);
 			if (proposedRelation == ObstacleSurfaceRelation::PlayerFace) {
 				return true;
 			}
+		}
+	}
+	return false;
+}
+
+bool GameScene::CanRotateThroughConnectedObstacle(int turnDirection) const {
+	const AABB playerAABB = player_->GetAABB();
+	const float rotationAmount =
+	    static_cast<float>(turnDirection) *
+	    std::numbers::pi_v<float> * 0.5f;
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		if (block->isFalling) {
+			continue;
+		}
+
+		bool hasCurrentPlayerFaceContact = false;
+		bool hasConnectedDestinationObstacle = false;
+		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
+			const ObstacleInteractionRules& rules =
+			    obstacle->GetInteractionRules();
+			if (!obstacle->IsCollisionEnabled()) {
+				continue;
+			}
+
+			const AABB obstacleAABB = GetObstacleLogicalAABB(
+			    *block, *obstacle, block->collisionRotationX);
+			const bool overlapsPlayerX =
+			    obstacleAABB.min.x <= playerAABB.max.x &&
+			    obstacleAABB.max.x >= playerAABB.min.x;
+			if (!overlapsPlayerX) {
+				continue;
+			}
+
+			const ObstacleSurfaceRelation currentRelation =
+			    obstacle->GetSurfaceRelation(
+			        block->collisionRotationX, kPlayerSurfaceNormal);
+			if (rules.pushesPlayerOnPlayerFace &&
+			    currentRelation == ObstacleSurfaceRelation::PlayerFace) {
+				const float obstacleCenterX =
+				    (obstacleAABB.min.x + obstacleAABB.max.x) * 0.5f;
+				hasCurrentPlayerFaceContact =
+				    hasCurrentPlayerFaceContact ||
+				    (IsCollision(playerAABB, obstacleAABB) &&
+				     obstacleCenterX >= player_->GetWorldPosition().x);
+			}
+
+			if (rules.blocksRotationFromSide &&
+			    obstacle->GetSurfaceRelation(
+			        block->collisionRotationX + rotationAmount,
+			        kPlayerSurfaceNormal) ==
+			        ObstacleSurfaceRelation::PlayerFace) {
+				hasConnectedDestinationObstacle = true;
+			}
+		}
+
+		if (hasCurrentPlayerFaceContact &&
+		    hasConnectedDestinationObstacle) {
+			return true;
 		}
 	}
 	return false;
@@ -389,6 +419,7 @@ void GameScene::UpdateMapBlocks() {
 			startedFalling = true;
 			block->verticalVelocity = 0.0f;
 			block->targetRotationX = block->rotationX;
+			block->collisionRotationX = block->rotationX;
 		}
 
 		if (!block->isFalling) {
@@ -400,21 +431,6 @@ void GameScene::UpdateMapBlocks() {
 			block->rotationX += std::clamp(
 			    rotationDifference, -rotationStep, rotationStep);
 
-			const float quarterTurn = std::numbers::pi_v<float> * 0.5f;
-			while (
-			    block->collisionRotationX + quarterTurn <=
-			        block->targetRotationX + 0.0001f &&
-			    block->collisionRotationX + quarterTurn <=
-			        block->rotationX + 0.0001f) {
-				block->collisionRotationX += quarterTurn;
-			}
-			while (
-			    block->collisionRotationX - quarterTurn >=
-			        block->targetRotationX - 0.0001f &&
-			    block->collisionRotationX - quarterTurn >=
-			        block->rotationX - 0.0001f) {
-				block->collisionRotationX -= quarterTurn;
-			}
 		}
 
 		if (block->isFalling) {
@@ -480,7 +496,9 @@ void GameScene::UpdateMapBlocks() {
 		for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 			frontX = (std::max)(frontX, block->positionX);
 		}
-		SpawnMapBlock(frontX + kBlockSize, true);
+		SpawnMapBlock(
+		    frontX + kBlockSize,
+		    levelGenerator_.CreateReplacementBlockPlan());
 	}
 }
 
@@ -577,6 +595,9 @@ void GameScene::DrawDebugInfo() {
 	char playerPositionText[64] = {};
 	char cameraPositionText[128] = {};
 	char cameraRotationText[128] = {};
+	char solverFaceText[96] = {};
+	char levelSeedText[64] = {};
+	char levelDifficultyText[64] = {};
 	std::snprintf(
 	    playerPositionText, sizeof(playerPositionText), "Player X: %.1f",
 	    player_->GetWorldPosition().x);
@@ -592,10 +613,27 @@ void GameScene::DrawDebugInfo() {
 	    debugCamera_.rotation_.x * radiansToDegrees,
 	    debugCamera_.rotation_.y * radiansToDegrees,
 	    debugCamera_.rotation_.z * radiansToDegrees);
+	int solverFaceIndex = (-mapRotationQuarterTurns_) % 4;
+	if (solverFaceIndex < 0) {
+		solverFaceIndex += 4;
+	}
+	std::snprintf(
+	    solverFaceText, sizeof(solverFaceText),
+	    "Solver Face: %d deg  (D: +90 / A: -90)",
+	    solverFaceIndex * 90);
+	std::snprintf(
+	    levelSeedText, sizeof(levelSeedText), "Level Seed: %u",
+	    levelGenerator_.GetSeed());
+	std::snprintf(
+	    levelDifficultyText, sizeof(levelDifficultyText),
+	    "Level Difficulty: %s", levelGenerator_.GetDifficultyName());
 
 	debugText->Print(playerPositionText, 10.0f, 10.0f, 1.0f);
 	debugText->Print(cameraPositionText, 10.0f, 30.0f, 1.0f);
 	debugText->Print(cameraRotationText, 10.0f, 50.0f, 1.0f);
+	debugText->Print(solverFaceText, 10.0f, 70.0f, 1.0f);
+	debugText->Print(levelSeedText, 10.0f, 90.0f, 1.0f);
+	debugText->Print(levelDifficultyText, 10.0f, 110.0f, 1.0f);
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	constexpr float hertaTextWidth = 5.0f * DebugText::kFontWidth;
 	const float hertaX =

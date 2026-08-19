@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameData.h"
+#include "LevelGenerator.h"
 #include "Obstacle.h"
 #include "Player.h"
 #include "Skydome.h"
@@ -35,17 +36,20 @@ private:
 
 	void InitializeMapBlocks();
 	void UpdateMapRotationInput();
-	bool IsMapRotationBlocked(int turnDirection) const;
+	bool IsMapRotationDestinationBlocked(
+	    int turnDirection, int quarterTurnCount) const;
+	bool CanRotateThroughConnectedObstacle(int turnDirection) const;
 	void StartBlockedRotationFeedback(int turnDirection);
 	float CalculateBlockedRotationOffset() const;
 	void UpdateMapBlocks();
 	void UpdateDetachedObstacles();
 	void ResolvePlayerObstacleCollisions();
-	void SpawnMapBlock(float positionX, bool canSpawnObstacle);
+	void SpawnMapBlock(
+	    float positionX, const MapBlockSpawnPlan& spawnPlan);
 	void AttachObstacle(
 	    MapBlock& block, KamataEngine::Model* model, BlockFace attachedFace,
-	    const KamataEngine::Vector3& size);
-	BlockFace FindPlayerFacingBlockFace(const MapBlock& block) const;
+	    const KamataEngine::Vector3& size,
+	    ObstacleInteractionRules interactionRules);
 	KamataEngine::Matrix4x4 CreateMapBlockLogicalTransform(
 	    const MapBlock& block, float rotationX) const;
 	AABB GetObstacleLogicalAABB(
@@ -76,6 +80,7 @@ private:
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
 	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
+	LevelGenerator levelGenerator_;
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
@@ -91,7 +96,6 @@ private:
 	bool isDebugMode_ = false;
 	std::size_t debugCommandIndex_ = 0;
 	int mapRotationQuarterTurns_ = 0;
-	bool hasSpawnedFirstObstacle_ = false;
 	float blockedRotationFeedbackTime_ = 0.0f;
 	int blockedRotationFeedbackDirection_ = 0;
 	float mapMoveSpeed_ = 0.0f;
@@ -140,11 +144,6 @@ private:
 	static inline const float kBlockedRotationFeedbackDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackAngle =
 	    15.0f * std::numbers::pi_v<float> / 180.0f;
-	static inline const KamataEngine::Vector3 kObstacleSize = {
-	    1.0f,
-	    1.0f,
-	    1.0f,
-	};
 	static inline const KamataEngine::Vector3 kPlayerSurfaceNormal = {
 	    0.0f,
 	    1.0f,

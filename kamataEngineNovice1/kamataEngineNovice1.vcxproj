@@ -170,6 +170,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
   <ItemGroup>
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp" />
     <ClCompile Include="GameScene.cpp" />
+    <ClCompile Include="LevelGenerator.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Obstacle.cpp" />
     <ClCompile Include="Player.cpp" />
@@ -179,6 +180,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
   <ItemGroup>
     <ClInclude Include="GameData.h" />
     <ClInclude Include="GameScene.h" />
+    <ClInclude Include="LevelGenerator.h" />
     <ClInclude Include="Collision.h" />
     <ClInclude Include="Obstacle.h" />
     <ClInclude Include="Player.h" />
