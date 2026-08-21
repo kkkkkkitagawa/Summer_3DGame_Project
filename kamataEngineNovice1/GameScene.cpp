@@ -193,9 +193,13 @@ void GameScene::InitializeMapBlocks() {
 	mapBlocks_.reserve(kMapBlockCount);
 	levelGenerator_.Reset();
 	for (std::size_t index = 0; index < kMapBlockCount; ++index) {
+		const MapBlockSpawnPlan spawnPlan =
+		    index < kInitialSafeBlockCount
+		        ? levelGenerator_.CreateInitialBlockPlan()
+		        : levelGenerator_.CreateReplacementBlockPlan();
 		SpawnMapBlock(
 		    sceneMap_.origin.x + static_cast<float>(index) * kBlockSize,
-		    levelGenerator_.CreateInitialBlockPlan());
+		    spawnPlan);
 	}
 }
 
@@ -206,6 +210,9 @@ void GameScene::SpawnMapBlock(
 	block->positionY = sceneMap_.groundHeight;
 	block->worldTransform.Initialize();
 	block->worldTransform.scale_ = {kBlockSize, kBlockSize, kBlockSize};
+	block->modelWorldTransform.Initialize();
+	block->modelWorldTransform.scale_ = {
+	    kBlockModelScale, kBlockModelScale, kBlockModelScale};
 	block->rotationX =
 	    static_cast<float>(mapRotationQuarterTurns_) *
 	    std::numbers::pi_v<float> * 0.5f;
@@ -215,6 +222,9 @@ void GameScene::SpawnMapBlock(
 	block->worldTransform.translation_ = {
 	    block->positionX, block->positionY, sceneMap_.origin.z};
 	WorldTransformUpdate(block->worldTransform);
+	block->modelWorldTransform.rotation_ = block->worldTransform.rotation_;
+	block->modelWorldTransform.translation_ = block->worldTransform.translation_;
+	WorldTransformUpdate(block->modelWorldTransform);
 	for (const ObstacleSpawnPlan& obstaclePlan : spawnPlan.obstacles) {
 		AttachObstacle(
 		    *block, modelObstacle_, obstaclePlan.attachedFace,
@@ -464,6 +474,10 @@ void GameScene::UpdateMapBlocks() {
 		}
 
 		WorldTransformUpdate(block->worldTransform);
+		block->modelWorldTransform.rotation_ = block->worldTransform.rotation_;
+		block->modelWorldTransform.translation_ =
+		    block->worldTransform.translation_;
+		WorldTransformUpdate(block->modelWorldTransform);
 		for (std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			obstacle->Update(kDeltaTime, kGravity);
 			if (startedFalling) {
@@ -627,7 +641,10 @@ void GameScene::DrawDebugInfo() {
 	std::snprintf(
 	    levelDifficultyText, sizeof(levelDifficultyText),
 	    "Level Difficulty: %s", levelGenerator_.GetDifficultyName());
-
+	char currentDifficultyText[64] = {};
+	std::snprintf(
+	    currentDifficultyText, sizeof(currentDifficultyText),
+	    "CURRENT DIFFICULTY: %s", levelGenerator_.GetDifficultyName());
 	debugText->Print(playerPositionText, 10.0f, 10.0f, 1.0f);
 	debugText->Print(cameraPositionText, 10.0f, 30.0f, 1.0f);
 	debugText->Print(cameraRotationText, 10.0f, 50.0f, 1.0f);
@@ -635,6 +652,17 @@ void GameScene::DrawDebugInfo() {
 	debugText->Print(levelSeedText, 10.0f, 90.0f, 1.0f);
 	debugText->Print(levelDifficultyText, 10.0f, 110.0f, 1.0f);
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+	constexpr float difficultyTextScale = 1.0f;
+	const float difficultyTextWidth =
+	    static_cast<float>(std::strlen(currentDifficultyText)) *
+	    DebugText::kFontWidth * difficultyTextScale;
+	const float difficultyTextX =
+	    (static_cast<float>(dxCommon->GetBackBufferWidth()) -
+	     difficultyTextWidth) *
+	    0.5f;
+	debugText->Print(
+	    currentDifficultyText, difficultyTextX, 24.0f,
+	    difficultyTextScale);
 	constexpr float hertaTextWidth = 5.0f * DebugText::kFontWidth;
 	const float hertaX =
 	    static_cast<float>(dxCommon->GetBackBufferWidth()) - hertaTextWidth - 10.0f;
@@ -775,6 +803,7 @@ void GameScene::Draw() {
 
 	if (isDebugMode_) {
 		DrawPlayerCollisionBox();
+		DrawObstacleCollisionBoxes();
 		DrawAxisIndicator();
 	}
 
@@ -785,7 +814,7 @@ void GameScene::Draw() {
 void GameScene::DrawMapBlocks() {
 	Model::PreDraw();
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
-		modelBlock_->Draw(block->worldTransform, GetActiveCamera());
+		modelBlock_->Draw(block->modelWorldTransform, GetActiveCamera());
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			obstacle->Draw(GetActiveCamera());
 		}
@@ -804,9 +833,30 @@ void GameScene::DrawPlayer() {
 
 void GameScene::DrawPlayerCollisionBox() {
 	primitiveDrawer_->SetCamera(&GetActiveCamera());
-	const AABB aabb = player_->GetAABB();
-	const Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+	DrawCollisionBox(
+	    player_->GetAABB(), {1.0f, 1.0f, 1.0f, 1.0f});
+}
 
+void GameScene::DrawObstacleCollisionBoxes() {
+	primitiveDrawer_->SetCamera(&GetActiveCamera());
+	const Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
+			if (!obstacle->IsCollisionEnabled()) {
+				continue;
+			}
+
+			// 表示補間ではなく、実際のゲーム判定に使うAABBを描画する。
+			DrawCollisionBox(
+			    GetObstacleLogicalAABB(
+			        *block, *obstacle, block->collisionRotationX),
+			    color);
+		}
+	}
+}
+
+void GameScene::DrawCollisionBox(
+    const AABB& aabb, const Vector4& color) {
 	const Vector3 corners[8] = {
 	    {aabb.min.x, aabb.min.y, aabb.min.z},
 	    {aabb.max.x, aabb.min.y, aabb.min.z},

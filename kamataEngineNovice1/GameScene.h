@@ -23,6 +23,7 @@ public:
 private:
 	struct MapBlock {
 		KamataEngine::WorldTransform worldTransform;
+		KamataEngine::WorldTransform modelWorldTransform;
 		float positionX = 0.0f;
 		float positionY = 0.0f;
 		float verticalVelocity = 0.0f;
@@ -65,6 +66,9 @@ private:
 	void DrawDebugCoordinateLabels();
 	void DrawPlayer();
 	void DrawPlayerCollisionBox();
+	void DrawObstacleCollisionBoxes();
+	void DrawCollisionBox(
+	    const AABB& aabb, const KamataEngine::Vector4& color);
 	void DrawAxisIndicator();
 	void DrawMouseCircle();
 	const KamataEngine::Camera& GetActiveCamera() const;
@@ -80,7 +84,8 @@ private:
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
 	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
-	LevelGenerator levelGenerator_;
+	// 現在は普通難度を生成する。採用済みの簡単難度シードは保持する。
+	LevelGenerator levelGenerator_{LevelDifficulty::Normal};
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
@@ -122,11 +127,15 @@ private:
 	static inline const float kAxisIndicatorMargin = 16.0f;
 	static inline const int kMouseCircleRadius = 16;
 
-	// The block OBJ is a 1-unit cube. One world unit represents 32 design pixels.
-	static inline const std::size_t kMapBlockCount = 20;
+	// The latest block OBJ is a 2-unit cube. Normalize it to one map block.
+	static inline const std::size_t kMapBlockCount = 23;
+	static inline const std::size_t kInitialSafeBlockCount = 15;
 	static inline const float kPixelsPerWorldUnit = 32.0f;
 	static inline const float kBlockSizePixels = 32.0f;
 	static inline const float kBlockSize = kBlockSizePixels / kPixelsPerWorldUnit;
+	static inline const float kBlockModelSourceSize = 2.0f;
+	static inline const float kBlockModelScale =
+	    kBlockSize / kBlockModelSourceSize;
 	static inline const float kPlayerGroundClearance =
 	    1.0f / kPixelsPerWorldUnit;
 	static inline const int kNegativeCoordinateCount = 5;

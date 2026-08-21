@@ -42,6 +42,7 @@ public:
 	    LevelDifficulty difficulty = LevelDifficulty::Normal);
 
 	void Reset();
+	void Reset(uint32_t seed);
 	MapBlockSpawnPlan CreateInitialBlockPlan();
 	MapBlockSpawnPlan CreateReplacementBlockPlan();
 
@@ -52,6 +53,10 @@ public:
 private:
 	using FaceMask = uint8_t;
 	static inline constexpr std::size_t kPatternLength = 10;
+	static inline constexpr int kMaximumStraightClearBlocks = 16;
+	static inline constexpr int kMaximumEndingClearStreak = 13;
+	// 実機テストで採用した簡単難度の固定シード。
+	static inline constexpr uint32_t kSavedEasySeed = 3747538539u;
 	using PatternDefinition = std::array<FaceMask, kPatternLength>;
 
 	struct SimulationResult {
@@ -83,4 +88,6 @@ private:
 	LevelDifficulty difficulty_ = LevelDifficulty::Normal;
 	FaceMask reachableFaces_ = 0x01;
 	std::array<FaceMask, 2> recentObstacleMasks_ = {};
+	std::array<int, 4> straightClearBlockCounts_ = {};
+	int consecutiveEmptyBlockCount_ = 0;
 };

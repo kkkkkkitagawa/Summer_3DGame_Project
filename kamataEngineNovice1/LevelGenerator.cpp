@@ -17,6 +17,30 @@ constexpr int kSolverFaceCount = 4;
 constexpr uint8_t kAllSolverFaces = 0x0f;
 constexpr int kMaximumGenerationAttempts = 256;
 
+struct DifficultySettings {
+	int minimumBufferLength;
+	int maximumBufferLength;
+	int minimumOccupiedBlockCount;
+	int maximumOccupiedBlockCount;
+	int maximumConsecutiveEmptyBlockCount;
+	std::array<double, 3> obstacleCountWeights;
+	double continueWallProbability;
+};
+
+DifficultySettings GetDifficultySettings(LevelDifficulty difficulty) {
+	switch (difficulty) {
+	case LevelDifficulty::Easy:
+		// 普通難度より余裕を残しつつ、障害物を以前より近く頻繁に出す。
+		return {2, 3, 4, 5, 7, {70.0, 30.0, 0.0}, 0.30};
+	case LevelDifficulty::Normal:
+		// 障害物の最低出現数だけを増やし、頻度を少し高くする。
+		return {2, 3, 5, 6, 5, {45.0, 35.0, 20.0}, 0.45};
+	case LevelDifficulty::Hard:
+		return {1, 2, 6, 7, 3, {25.0, 40.0, 35.0}, 0.60};
+	}
+	return {2, 3, 4, 6, 5, {45.0, 35.0, 20.0}, 0.45};
+}
+
 int ToFaceIndex(SolverFace solverFace) {
 	return static_cast<int>(solverFace);
 }
@@ -40,17 +64,28 @@ const char* LevelGenerator::GetDifficultyName() const {
 }
 
 void LevelGenerator::Reset() {
+	if (difficulty_ == LevelDifficulty::Easy) {
+		Reset(kSavedEasySeed);
+		return;
+	}
+
 	std::random_device randomDevice;
-	seed_ = randomDevice();
+	Reset(randomDevice());
+}
+
+void LevelGenerator::Reset(uint32_t seed) {
+	seed_ = seed;
 	randomEngine_.seed(seed_);
 	pendingPlans_.clear();
 	// ゲーム開始時点のプレイヤー面は0度。
 	reachableFaces_ = 0x01;
 	recentObstacleMasks_ = {};
+	straightClearBlockCounts_ = {};
+	consecutiveEmptyBlockCount_ = 0;
 }
 
 MapBlockSpawnPlan LevelGenerator::CreateInitialBlockPlan() {
-	// 初期20ブロックは空。空ブロック中のA/D移動も求解状態へ反映する。
+	// 初期マップブロックは空。空ブロック中のA/D移動も求解状態へ反映する。
 	reachableFaces_ =
 	    AdvanceReachableFaces(reachableFaces_, recentObstacleMasks_[0] |
 	                                                 recentObstacleMasks_[1]);
@@ -84,21 +119,31 @@ void LevelGenerator::QueueNextPattern() {
 		}
 	}
 
-	// ランダム候補が成立しない場合は、2つの短い壁を持つ安全形を使う。
+	// ランダム候補が成立しない場合は、全4面へ順番に障害物を置く
+	// 安全形を使い、どの面にも長い直線を残さない。
 	constexpr FaceMask face0 = 1u << 0;
+	constexpr FaceMask face1 = 1u << 1;
 	constexpr FaceMask face2 = 1u << 2;
+	constexpr FaceMask face3 = 1u << 3;
 	const PatternDefinition fallback = {
-	    0, 0, face0, face0, 0, 0, face2, face2, 0, 0};
+	    0, 0, face0, face1, face2, face3, 0, 0, face0, face2};
 	const bool queued = TryQueuePattern(fallback, 0, false);
 	assert(queued);
 	(void)queued;
 }
 
 LevelGenerator::PatternDefinition LevelGenerator::GenerateCandidatePattern() {
-	std::uniform_int_distribution<int> bufferDistribution(2, 3);
-	std::uniform_int_distribution<int> occupiedBlockDistribution(4, 6);
-	std::discrete_distribution<int> obstacleCountDistribution({45, 35, 20});
-	std::bernoulli_distribution continueWallDistribution(0.45);
+	const DifficultySettings settings = GetDifficultySettings(difficulty_);
+	std::uniform_int_distribution<int> bufferDistribution(
+	    settings.minimumBufferLength, settings.maximumBufferLength);
+	std::uniform_int_distribution<int> occupiedBlockDistribution(
+	    settings.minimumOccupiedBlockCount,
+	    settings.maximumOccupiedBlockCount);
+	std::discrete_distribution<int> obstacleCountDistribution(
+	    settings.obstacleCountWeights.begin(),
+	    settings.obstacleCountWeights.end());
+	std::bernoulli_distribution continueWallDistribution(
+	    settings.continueWallProbability);
 
 	for (int attempt = 0; attempt < 64; ++attempt) {
 		PatternDefinition pattern = {};
@@ -142,12 +187,61 @@ LevelGenerator::PatternDefinition LevelGenerator::GenerateCandidatePattern() {
 	}
 
 	constexpr FaceMask face0 = 1u << 0;
+	constexpr FaceMask face1 = 1u << 1;
 	constexpr FaceMask face2 = 1u << 2;
-	return {0, 0, face0, face0, 0, 0, face2, face2, 0, 0};
+	constexpr FaceMask face3 = 1u << 3;
+	return {0, 0, face0, face1, face2, face3, 0, 0, face0, face2};
 }
 
 bool LevelGenerator::TryQueuePattern(
     const PatternDefinition& pattern, int faceOffset, bool isMirrored) {
+	const DifficultySettings settings = GetDifficultySettings(difficulty_);
+	int nextEmptyBlockCount = consecutiveEmptyBlockCount_;
+	for (FaceMask rawFaceMask : pattern) {
+		if (rawFaceMask == 0) {
+			++nextEmptyBlockCount;
+			if (nextEmptyBlockCount >
+			    settings.maximumConsecutiveEmptyBlockCount) {
+				return false;
+			}
+		} else {
+			nextEmptyBlockCount = 0;
+		}
+	}
+	// 次パターンが最短の安全間隔から始まっても生成可能な余裕を残す。
+	const int maximumEndingEmptyBlockCount =
+	    settings.maximumConsecutiveEmptyBlockCount -
+	    settings.minimumBufferLength;
+	if (nextEmptyBlockCount > maximumEndingEmptyBlockCount) {
+		return false;
+	}
+
+	std::array<int, kSolverFaceCount> nextClearBlockCounts =
+	    straightClearBlockCounts_;
+	for (FaceMask rawFaceMask : pattern) {
+		const FaceMask transformedFaceMask =
+		    TransformFaceMask(rawFaceMask, faceOffset, isMirrored);
+		for (int faceIndex = 0; faceIndex < kSolverFaceCount; ++faceIndex) {
+			const FaceMask faceBit = static_cast<FaceMask>(1u << faceIndex);
+			if ((transformedFaceMask & faceBit) != 0) {
+				nextClearBlockCounts[faceIndex] = 0;
+				continue;
+			}
+
+			++nextClearBlockCounts[faceIndex];
+			if (nextClearBlockCounts[faceIndex] >
+			    kMaximumStraightClearBlocks) {
+				return false;
+			}
+		}
+	}
+	// 次パターン先頭の安全間隔を考慮し、末尾にも余裕を残す。
+	for (int clearBlockCount : nextClearBlockCounts) {
+		if (clearBlockCount > kMaximumEndingClearStreak) {
+			return false;
+		}
+	}
+
 	// 0、90、180、270度のどの面から入っても最低1つの解が残ることを確認する。
 	for (int entryFace = 0; entryFace < kSolverFaceCount; ++entryFace) {
 		const FaceMask entryMask = static_cast<FaceMask>(1u << entryFace);
@@ -185,6 +279,8 @@ bool LevelGenerator::TryQueuePattern(
 	}
 	reachableFaces_ = result.reachableFaces;
 	recentObstacleMasks_ = result.recentObstacleMasks;
+	straightClearBlockCounts_ = nextClearBlockCounts;
+	consecutiveEmptyBlockCount_ = nextEmptyBlockCount;
 	return true;
 }
 

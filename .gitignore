@@ -78,6 +78,7 @@ StyleCopReport.xml
 *.obj
 !Resources/SkyDome/SkyDome.obj
 !Resources/playerTest/playerTest.obj
+!Resources/block/block.obj
 *.iobj
 *.pch
 *.pdb

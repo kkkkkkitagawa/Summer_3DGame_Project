@@ -13,10 +13,11 @@ public:
 	AABB GetAABB() const;
 	void SetPositionX(float positionX);
 
+	static inline constexpr float kCollisionScale = 0.9f;
 	static inline const KamataEngine::Vector3 kCollisionHalfSize = {
-	    0.5f,
-	    0.5f,
-	    0.5f,
+	    0.5f * kCollisionScale,
+	    0.5f * kCollisionScale,
+	    0.5f * kCollisionScale,
 	};
 	static inline const KamataEngine::Vector3 kModelScale = {
 	    2.0f,
