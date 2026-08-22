@@ -106,8 +106,9 @@ GameScene::~GameScene() {
 	delete mouseCircleSprite_;
 }
 
-void GameScene::Initialize() {
+void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	mapMoveSpeed_ = kInitialMapMoveSpeed;
+	obstacleGenerationEnabled_ = obstacleGenerationEnabled;
 
 	modelSkydome_ = Model::CreateFromOBJ("SkyDome", true);
 	assert(modelSkydome_);
@@ -141,8 +142,8 @@ void GameScene::Initialize() {
 
 	playerCamera_.farZ = 1000.0f;
 	playerCamera_.Initialize();
-	playerCamera_.translation_ = {-3.395f, 5.308f, -6.101f};
-	playerCamera_.rotation_ = {0.625002f, 0.419926f, 0.0f};
+	playerCamera_.translation_ = {-3.553f, 8.184f, -9.808f};
+	playerCamera_.rotation_ = {0.685042f, 0.400029f, 0.0f};
 	playerCamera_.UpdateMatrix();
 
 	debugCamera_.farZ = 1000.0f;
@@ -177,13 +178,17 @@ void GameScene::Initialize() {
 	AxisIndicator::SetVisible(false);
 }
 
-void GameScene::Update() {
+void GameScene::Update(bool allowMapRotationInput) {
 	skydome_->Update();
 	player_->Update(
 	    kInitialMapMoveSpeed, sceneMap_.origin.x, kDeltaTime);
-	UpdateMapRotationInput();
+	if (allowMapRotationInput) {
+		UpdateMapRotationInput();
+	}
 	UpdateMapBlocks();
-	ResolvePlayerObstacleCollisions();
+	if (obstacleGenerationEnabled_) {
+		ResolvePlayerObstacleCollisions();
+	}
 	UpdateDebugCommand();
 	UpdateCamera();
 }
@@ -194,7 +199,9 @@ void GameScene::InitializeMapBlocks() {
 	levelGenerator_.Reset();
 	for (std::size_t index = 0; index < kMapBlockCount; ++index) {
 		const MapBlockSpawnPlan spawnPlan =
-		    index < kInitialSafeBlockCount
+		    !obstacleGenerationEnabled_
+		        ? MapBlockSpawnPlan{}
+		        : index < kInitialSafeBlockCount
 		        ? levelGenerator_.CreateInitialBlockPlan()
 		        : levelGenerator_.CreateReplacementBlockPlan();
 		SpawnMapBlock(
@@ -275,8 +282,7 @@ void GameScene::UpdateMapRotationInput() {
 	}
 
 	const int turnDirection = rotateLeft ? 1 : -1;
-	if (IsMapRotationDestinationBlocked(turnDirection, 1) &&
-	    !CanRotateThroughConnectedObstacle(turnDirection)) {
+	if (IsMapRotationDestinationBlocked(turnDirection, 1)) {
 		StartBlockedRotationFeedback(turnDirection);
 		return;
 	}
@@ -311,47 +317,8 @@ bool GameScene::IsMapRotationDestinationBlocked(
 			continue;
 		}
 
-		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
-			const ObstacleInteractionRules& rules =
-			    obstacle->GetInteractionRules();
-			if (!obstacle->IsCollisionEnabled() ||
-			    !rules.blocksRotationFromSide) {
-				continue;
-			}
-
-			const AABB obstacleAABB = GetObstacleLogicalAABB(
-			    *block, *obstacle, block->collisionRotationX);
-			const bool overlapsPlayerX =
-			    obstacleAABB.min.x <= playerAABB.max.x &&
-			    obstacleAABB.max.x >= playerAABB.min.x;
-			if (!overlapsPlayerX) {
-				continue;
-			}
-
-			const ObstacleSurfaceRelation proposedRelation =
-			    obstacle->GetSurfaceRelation(
-			        block->collisionRotationX + rotationAmount,
-			        kPlayerSurfaceNormal);
-			if (proposedRelation == ObstacleSurfaceRelation::PlayerFace) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-bool GameScene::CanRotateThroughConnectedObstacle(int turnDirection) const {
-	const AABB playerAABB = player_->GetAABB();
-	const float rotationAmount =
-	    static_cast<float>(turnDirection) *
-	    std::numbers::pi_v<float> * 0.5f;
-	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
-		if (block->isFalling) {
-			continue;
-		}
-
 		bool hasCurrentPlayerFaceContact = false;
-		bool hasConnectedDestinationObstacle = false;
+		bool hasDestinationBlocker = false;
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			const ObstacleInteractionRules& rules =
 			    obstacle->GetInteractionRules();
@@ -362,8 +329,10 @@ bool GameScene::CanRotateThroughConnectedObstacle(int turnDirection) const {
 			const AABB obstacleAABB = GetObstacleLogicalAABB(
 			    *block, *obstacle, block->collisionRotationX);
 			const bool overlapsPlayerX =
-			    obstacleAABB.min.x <= playerAABB.max.x &&
-			    obstacleAABB.max.x >= playerAABB.min.x;
+			    obstacleAABB.min.x <=
+			        playerAABB.max.x + kRotationBlockerSkin &&
+			    obstacleAABB.max.x >=
+			        playerAABB.min.x - kRotationBlockerSkin;
 			if (!overlapsPlayerX) {
 				continue;
 			}
@@ -381,20 +350,23 @@ bool GameScene::CanRotateThroughConnectedObstacle(int turnDirection) const {
 				     obstacleCenterX >= player_->GetWorldPosition().x);
 			}
 
-			if (rules.blocksRotationFromSide &&
+			const ObstacleSurfaceRelation proposedRelation =
 			    obstacle->GetSurfaceRelation(
 			        block->collisionRotationX + rotationAmount,
-			        kPlayerSurfaceNormal) ==
-			        ObstacleSurfaceRelation::PlayerFace) {
-				hasConnectedDestinationObstacle = true;
+			        kPlayerSurfaceNormal);
+			if (rules.blocksRotationFromSide &&
+			    proposedRelation == ObstacleSurfaceRelation::PlayerFace) {
+				hasDestinationBlocker = true;
 			}
 		}
 
-		if (hasCurrentPlayerFaceContact &&
-		    hasConnectedDestinationObstacle) {
+		// 連続壁の例外は同じマップブロック内だけで成立する。
+		// 別ブロック由来の進行先障害物は、他の例外で解除しない。
+		if (hasDestinationBlocker && !hasCurrentPlayerFaceContact) {
 			return true;
 		}
 	}
+
 	return false;
 }
 
@@ -512,7 +484,9 @@ void GameScene::UpdateMapBlocks() {
 		}
 		SpawnMapBlock(
 		    frontX + kBlockSize,
-		    levelGenerator_.CreateReplacementBlockPlan());
+		    obstacleGenerationEnabled_
+		        ? levelGenerator_.CreateReplacementBlockPlan()
+		        : MapBlockSpawnPlan{});
 	}
 }
 
@@ -612,6 +586,7 @@ void GameScene::DrawDebugInfo() {
 	char solverFaceText[96] = {};
 	char levelSeedText[64] = {};
 	char levelDifficultyText[64] = {};
+	char mapMoveSpeedText[64] = {};
 	std::snprintf(
 	    playerPositionText, sizeof(playerPositionText), "Player X: %.1f",
 	    player_->GetWorldPosition().x);
@@ -641,6 +616,9 @@ void GameScene::DrawDebugInfo() {
 	std::snprintf(
 	    levelDifficultyText, sizeof(levelDifficultyText),
 	    "Level Difficulty: %s", levelGenerator_.GetDifficultyName());
+	std::snprintf(
+	    mapMoveSpeedText, sizeof(mapMoveSpeedText),
+	    "Map Move Speed: %.2f", mapMoveSpeed_);
 	char currentDifficultyText[64] = {};
 	std::snprintf(
 	    currentDifficultyText, sizeof(currentDifficultyText),
@@ -651,6 +629,7 @@ void GameScene::DrawDebugInfo() {
 	debugText->Print(solverFaceText, 10.0f, 70.0f, 1.0f);
 	debugText->Print(levelSeedText, 10.0f, 90.0f, 1.0f);
 	debugText->Print(levelDifficultyText, 10.0f, 110.0f, 1.0f);
+	debugText->Print(mapMoveSpeedText, 10.0f, 130.0f, 1.0f);
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	constexpr float difficultyTextScale = 1.0f;
 	const float difficultyTextWidth =

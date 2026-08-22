@@ -79,6 +79,22 @@ StyleCopReport.xml
 !Resources/SkyDome/SkyDome.obj
 !Resources/playerTest/playerTest.obj
 !Resources/block/block.obj
+!Resources/Title/Title.obj
+!Resources/GameOver/GameOver.obj
+!Resources/number/one/one.obj
+!Resources/number/two/two.obj
+!Resources/number/three/three.obj
+!Resources/one/one.obj
+!Resources/two/two.obj
+!Resources/three/three.obj
+
+# Resource copies produced by the project post-build xcopy step.
+/kamataEngineNovice1/Resources/GameOver/
+/kamataEngineNovice1/Resources/Title/
+/kamataEngineNovice1/Resources/number/
+/kamataEngineNovice1/Resources/one/
+/kamataEngineNovice1/Resources/two/
+/kamataEngineNovice1/Resources/three/
 *.iobj
 *.pch
 *.pdb

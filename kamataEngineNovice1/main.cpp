@@ -1,4 +1,4 @@
-#include "GameScene.h"
+#include "SceneManager.h"
 
 #include "KamataEngine.h"
 
@@ -11,23 +11,23 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int) {
 
 	KamataEngine::Initialize(L"GC2C_06_タン_クンブン_AL3"); 
 
-	GameScene* gameScene = new GameScene();
-	gameScene->Initialize();
+	SceneManager* sceneManager = new SceneManager();
+	sceneManager->Initialize();
 
 	while (true) {
 		if (KamataEngine::Update()) {
 			break;
 		}
 
-		gameScene->Update();
+		sceneManager->Update();
 
 		dxCommon->PreDraw();
-		gameScene->Draw();
+		sceneManager->Draw();
 		dxCommon->PostDraw();
 	}
 
-	delete gameScene;
-	gameScene = nullptr;
+	delete sceneManager;
+	sceneManager = nullptr;
 
 	KamataEngine::Finalize();
 	return 0;

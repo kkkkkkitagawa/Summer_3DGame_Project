@@ -18,6 +18,7 @@ constexpr uint8_t kAllSolverFaces = 0x0f;
 constexpr int kMaximumGenerationAttempts = 256;
 
 struct DifficultySettings {
+	bool usesGlobalSafeBuffer;
 	int minimumBufferLength;
 	int maximumBufferLength;
 	int minimumOccupiedBlockCount;
@@ -31,14 +32,15 @@ DifficultySettings GetDifficultySettings(LevelDifficulty difficulty) {
 	switch (difficulty) {
 	case LevelDifficulty::Easy:
 		// 普通難度より余裕を残しつつ、障害物を以前より近く頻繁に出す。
-		return {2, 3, 4, 5, 7, {70.0, 30.0, 0.0}, 0.30};
+		return {true, 2, 3, 4, 5, 7, {70.0, 30.0, 0.0}, 0.30};
 	case LevelDifficulty::Normal:
 		// 障害物の最低出現数だけを増やし、頻度を少し高くする。
-		return {2, 3, 5, 6, 5, {45.0, 35.0, 20.0}, 0.45};
+		return {true, 2, 3, 5, 6, 5, {45.0, 35.0, 20.0}, 0.45};
 	case LevelDifficulty::Hard:
-		return {1, 2, 6, 7, 3, {25.0, 40.0, 35.0}, 0.60};
+		// 困難難度は全体空白バッファを使わず、各面の安全距離で制限する。
+		return {false, 0, 0, 6, 7, 0, {25.0, 40.0, 35.0}, 0.60};
 	}
-	return {2, 3, 4, 6, 5, {45.0, 35.0, 20.0}, 0.45};
+	return {true, 2, 3, 4, 6, 5, {45.0, 35.0, 20.0}, 0.45};
 }
 
 int ToFaceIndex(SolverFace solverFace) {
@@ -66,6 +68,10 @@ const char* LevelGenerator::GetDifficultyName() const {
 void LevelGenerator::Reset() {
 	if (difficulty_ == LevelDifficulty::Easy) {
 		Reset(kSavedEasySeed);
+		return;
+	}
+	if (difficulty_ == LevelDifficulty::Hard) {
+		Reset(kSavedHardSeed);
 		return;
 	}
 
@@ -119,17 +125,26 @@ void LevelGenerator::QueueNextPattern() {
 		}
 	}
 
-	// ランダム候補が成立しない場合は、全4面へ順番に障害物を置く
-	// 安全形を使い、どの面にも長い直線を残さない。
-	constexpr FaceMask face0 = 1u << 0;
-	constexpr FaceMask face1 = 1u << 1;
-	constexpr FaceMask face2 = 1u << 2;
-	constexpr FaceMask face3 = 1u << 3;
-	const PatternDefinition fallback = {
-	    0, 0, face0, face1, face2, face3, 0, 0, face0, face2};
-	const bool queued = TryQueuePattern(fallback, 0, false);
-	assert(queued);
-	(void)queued;
+	// ランダム候補が成立しない場合は、空白を置かず4面を順番に塞ぐ。
+	// 現在の到達面と直近2ブロックに適合する順番を全24通りから選ぶ。
+	std::array<int, kSolverFaceCount> fallbackFaceOrder = {0, 1, 2, 3};
+	do {
+		PatternDefinition fallback = {};
+		for (std::size_t blockIndex = 0; blockIndex < kPatternLength;
+		     ++blockIndex) {
+			const int orderIndex = static_cast<int>(
+			    blockIndex % static_cast<std::size_t>(kSolverFaceCount));
+			fallback[blockIndex] = static_cast<FaceMask>(
+			    1u << fallbackFaceOrder[orderIndex]);
+		}
+		if (TryQueuePattern(fallback, 0, false)) {
+			return;
+		}
+	} while (std::next_permutation(
+	    fallbackFaceOrder.begin(), fallbackFaceOrder.end()));
+
+	// TryQueuePatternの末尾余裕と継続可能性の検査により到達しない。
+	assert(false);
 }
 
 LevelGenerator::PatternDefinition LevelGenerator::GenerateCandidatePattern() {
@@ -147,7 +162,9 @@ LevelGenerator::PatternDefinition LevelGenerator::GenerateCandidatePattern() {
 
 	for (int attempt = 0; attempt < 64; ++attempt) {
 		PatternDefinition pattern = {};
-		const int bufferLength = bufferDistribution(randomEngine_);
+		const int bufferLength = settings.usesGlobalSafeBuffer
+		                             ? bufferDistribution(randomEngine_)
+		                             : 0;
 		std::vector<int> availableBlockIndices;
 		for (
 		    int blockIndex = bufferLength;
@@ -197,23 +214,25 @@ bool LevelGenerator::TryQueuePattern(
     const PatternDefinition& pattern, int faceOffset, bool isMirrored) {
 	const DifficultySettings settings = GetDifficultySettings(difficulty_);
 	int nextEmptyBlockCount = consecutiveEmptyBlockCount_;
-	for (FaceMask rawFaceMask : pattern) {
-		if (rawFaceMask == 0) {
-			++nextEmptyBlockCount;
-			if (nextEmptyBlockCount >
-			    settings.maximumConsecutiveEmptyBlockCount) {
-				return false;
+	if (settings.usesGlobalSafeBuffer) {
+		for (FaceMask rawFaceMask : pattern) {
+			if (rawFaceMask == 0) {
+				++nextEmptyBlockCount;
+				if (nextEmptyBlockCount >
+				    settings.maximumConsecutiveEmptyBlockCount) {
+					return false;
+				}
+			} else {
+				nextEmptyBlockCount = 0;
 			}
-		} else {
-			nextEmptyBlockCount = 0;
 		}
-	}
-	// 次パターンが最短の安全間隔から始まっても生成可能な余裕を残す。
-	const int maximumEndingEmptyBlockCount =
-	    settings.maximumConsecutiveEmptyBlockCount -
-	    settings.minimumBufferLength;
-	if (nextEmptyBlockCount > maximumEndingEmptyBlockCount) {
-		return false;
+		// 次パターンが最短の安全間隔から始まっても生成可能な余裕を残す。
+		const int maximumEndingEmptyBlockCount =
+		    settings.maximumConsecutiveEmptyBlockCount -
+		    settings.minimumBufferLength;
+		if (nextEmptyBlockCount > maximumEndingEmptyBlockCount) {
+			return false;
+		}
 	}
 
 	std::array<int, kSolverFaceCount> nextClearBlockCounts =
@@ -231,11 +250,13 @@ bool LevelGenerator::TryQueuePattern(
 			++nextClearBlockCounts[faceIndex];
 			if (nextClearBlockCounts[faceIndex] >
 			    kMaximumStraightClearBlocks) {
+				// この面が11ブロック以上連続で空く候補は採用せず、
+				// QueueNextPatternで別の並びを生成し直す。
 				return false;
 			}
 		}
 	}
-	// 次パターン先頭の安全間隔を考慮し、末尾にも余裕を残す。
+	// 次の片で最も遅い面を3ブロック後に補う余裕を確保する。
 	for (int clearBlockCount : nextClearBlockCounts) {
 		if (clearBlockCount > kMaximumEndingClearStreak) {
 			return false;
@@ -256,6 +277,16 @@ bool LevelGenerator::TryQueuePattern(
 	    pattern, faceOffset, isMirrored, reachableFaces_,
 	    recentObstacleMasks_);
 	if (result.reachableFaces == 0) {
+		return false;
+	}
+	// 現在の片を抜けた直後にも最低1面が残ることを確認する。
+	// これがないと次回は最初の障害物を調べる前に全経路が消える。
+	const FaceMask continuingFaces = AdvanceReachableFaces(
+	    result.reachableFaces,
+	    static_cast<FaceMask>(
+	        result.recentObstacleMasks[0] |
+	        result.recentObstacleMasks[1]));
+	if (continuingFaces == 0) {
 		return false;
 	}
 

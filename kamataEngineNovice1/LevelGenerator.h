@@ -53,10 +53,16 @@ public:
 private:
 	using FaceMask = uint8_t;
 	static inline constexpr std::size_t kPatternLength = 10;
-	static inline constexpr int kMaximumStraightClearBlocks = 16;
-	static inline constexpr int kMaximumEndingClearStreak = 13;
+	// 各面は10ブロックまで連続で空けられる。11ブロック目が空く候補は
+	// 種子の境界をまたぐ場合も不採用にして生成し直す。
+	static inline constexpr int kMaximumStraightClearBlocks = 10;
+	// 次の10ブロック片で4面を順番に塞げるよう、末尾に3ブロック分の
+	// 生成余裕を残す。
+	static inline constexpr int kMaximumEndingClearStreak = 7;
 	// 実機テストで採用した簡単難度の固定シード。
 	static inline constexpr uint32_t kSavedEasySeed = 3747538539u;
+	// 実機テストで採用した困難難度の固定シード。
+	static inline constexpr uint32_t kSavedHardSeed = 3606607211u;
 	using PatternDefinition = std::array<FaceMask, kPatternLength>;
 
 	struct SimulationResult {

@@ -16,9 +16,10 @@ class GameScene {
 public:
 	~GameScene();
 
-	void Initialize();
-	void Update();
+	void Initialize(bool obstacleGenerationEnabled = true);
+	void Update(bool allowMapRotationInput = true);
 	void Draw();
+	bool IsDebugMode() const { return isDebugMode_; }
 
 private:
 	struct MapBlock {
@@ -39,7 +40,6 @@ private:
 	void UpdateMapRotationInput();
 	bool IsMapRotationDestinationBlocked(
 	    int turnDirection, int quarterTurnCount) const;
-	bool CanRotateThroughConnectedObstacle(int turnDirection) const;
 	void StartBlockedRotationFeedback(int turnDirection);
 	float CalculateBlockedRotationOffset() const;
 	void UpdateMapBlocks();
@@ -84,8 +84,8 @@ private:
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
 	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
-	// 現在は普通難度を生成する。採用済みの簡単難度シードは保持する。
-	LevelGenerator levelGenerator_{LevelDifficulty::Normal};
+	// 現在は試験用に難しい難度を生成する。採用済みの簡単難度シードは保持する。
+	LevelGenerator levelGenerator_{LevelDifficulty::Hard};
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
@@ -104,6 +104,7 @@ private:
 	float blockedRotationFeedbackTime_ = 0.0f;
 	int blockedRotationFeedbackDirection_ = 0;
 	float mapMoveSpeed_ = 0.0f;
+	bool obstacleGenerationEnabled_ = true;
 
 	static inline const std::array<BYTE, 5> kEnterDebugCommand = {
 	    DIK_L,
@@ -131,6 +132,9 @@ private:
 	static inline const std::size_t kMapBlockCount = 23;
 	static inline const std::size_t kInitialSafeBlockCount = 15;
 	static inline const float kPixelsPerWorldUnit = 32.0f;
+	// 隣り合うブロックの境界を浮動小数点誤差で抜けないための判定余白。
+	static inline const float kRotationBlockerSkin =
+	    1.0f / kPixelsPerWorldUnit;
 	static inline const float kBlockSizePixels = 32.0f;
 	static inline const float kBlockSize = kBlockSizePixels / kPixelsPerWorldUnit;
 	static inline const float kBlockModelSourceSize = 2.0f;
