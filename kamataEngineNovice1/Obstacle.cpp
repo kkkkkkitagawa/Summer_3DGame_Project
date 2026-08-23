@@ -10,14 +10,22 @@ using namespace KamataEngine;
 void Obstacle::Initialize(
     Model* model, BlockFace attachedFace, WorldTransform* parent,
     float blockHalfSize, const Vector3& size,
-    ObstacleInteractionRules interactionRules) {
+    ObstacleInteractionRules interactionRules, float visualHeightScale,
+    float visualGrowthDuration) {
 	assert(model);
 	assert(parent);
 	assert(size.x > 0.0f && size.y > 0.0f && size.z > 0.0f);
+	assert(visualHeightScale > 0.0f);
+	assert(visualGrowthDuration > 0.0f);
 
 	model_ = model;
 	attachedFace_ = attachedFace;
 	interactionRules_ = interactionRules;
+	logicalSize_ = size;
+	blockHalfSize_ = blockHalfSize;
+	visualHeightScale_ = visualHeightScale;
+	visualGrowthDuration_ = visualGrowthDuration;
+	visualGrowthElapsed_ = 0.0f;
 	worldTransform_.Initialize();
 	worldTransform_.parent_ = parent;
 	// Resources/cube has local bounds from -1 to +1 on every axis.
@@ -25,16 +33,50 @@ void Obstacle::Initialize(
 	worldTransform_.translation_ =
 	    CalculateLocalPosition(attachedFace, blockHalfSize, size);
 	WorldTransformUpdate(worldTransform_);
+
+	visualWorldTransform_.Initialize();
+	visualWorldTransform_.parent_ = parent;
+	UpdateVisualTransform();
 }
 
-void Obstacle::Update(float deltaTime, float gravity) {
+void Obstacle::Update(
+    float deltaTime, float gravity, float timeUntilGrowthDeadline,
+    bool canStartVisualGrowth) {
 	if (isFalling_) {
 		velocity_.y -= gravity * deltaTime;
-		worldTransform_.translation_.x += velocity_.x * deltaTime;
-		worldTransform_.translation_.y += velocity_.y * deltaTime;
-		worldTransform_.translation_.z += velocity_.z * deltaTime;
+		const Vector3 movement = {
+		    velocity_.x * deltaTime,
+		    velocity_.y * deltaTime,
+		    velocity_.z * deltaTime,
+		};
+		worldTransform_.translation_.x += movement.x;
+		worldTransform_.translation_.y += movement.y;
+		worldTransform_.translation_.z += movement.z;
+		visualWorldTransform_.translation_.x += movement.x;
+		visualWorldTransform_.translation_.y += movement.y;
+		visualWorldTransform_.translation_.z += movement.z;
+		WorldTransformUpdate(worldTransform_);
+		WorldTransformUpdate(visualWorldTransform_);
+		return;
 	}
+
+	if (canStartVisualGrowth) {
+		isVisualGrowthStarted_ = true;
+	}
+	if (isVisualGrowthStarted_) {
+		visualGrowthElapsed_ = (std::min)(
+		    visualGrowthDuration_, visualGrowthElapsed_ + deltaTime);
+	}
+	// If the map speed is increased after this obstacle spawns, advance the
+	// presentation as needed so it still finishes before reaching x = 0.
+	const float minimumElapsedForDeadline =
+	    visualGrowthDuration_ - (std::max)(0.0f, timeUntilGrowthDeadline);
+	visualGrowthElapsed_ = (std::max)(
+	    visualGrowthElapsed_,
+	    std::clamp(
+	        minimumElapsedForDeadline, 0.0f, visualGrowthDuration_));
 	WorldTransformUpdate(worldTransform_);
+	UpdateVisualTransform();
 }
 
 void Obstacle::DetachAndFall(
@@ -48,10 +90,18 @@ void Obstacle::DetachAndFall(
 	    GetFaceNormal(attachedFace_), parent->matWorld_);
 	MathUtility::Normalize(outwardNormal);
 	const Vector3 worldPosition = GetWorldPosition();
+	const Vector3 visualWorldPosition = {
+	    visualWorldTransform_.matWorld_.m[3][0],
+	    visualWorldTransform_.matWorld_.m[3][1],
+	    visualWorldTransform_.matWorld_.m[3][2],
+	};
 
 	worldTransform_.parent_ = nullptr;
 	worldTransform_.translation_ = worldPosition;
 	worldTransform_.rotation_ = parent->rotation_;
+	visualWorldTransform_.parent_ = nullptr;
+	visualWorldTransform_.translation_ = visualWorldPosition;
+	visualWorldTransform_.rotation_ = parent->rotation_;
 	velocity_ = {
 	    inheritedVelocity.x + outwardNormal.x * repulsionSpeed,
 	    inheritedVelocity.y + outwardNormal.y * repulsionSpeed,
@@ -60,10 +110,41 @@ void Obstacle::DetachAndFall(
 	isCollisionEnabled_ = false;
 	isFalling_ = true;
 	WorldTransformUpdate(worldTransform_);
+	WorldTransformUpdate(visualWorldTransform_);
 }
 
 void Obstacle::Draw(const Camera& camera) const {
-	model_->Draw(worldTransform_, camera);
+	model_->Draw(visualWorldTransform_, camera);
+}
+
+void Obstacle::UpdateVisualTransform() {
+	const float progress = std::clamp(
+	    visualGrowthElapsed_ / visualGrowthDuration_, 0.0f, 1.0f);
+	const float smoothProgress = progress * progress * (3.0f - 2.0f * progress);
+	const float currentHeightScale =
+	    kMinimumVisualHeightScale +
+	    (visualHeightScale_ - kMinimumVisualHeightScale) * smoothProgress;
+
+	Vector3 visualSize = logicalSize_;
+	switch (attachedFace_) {
+	case BlockFace::Top:
+	case BlockFace::Bottom:
+		visualSize.y *= currentHeightScale;
+		break;
+	case BlockFace::Front:
+	case BlockFace::Back:
+		visualSize.z *= currentHeightScale;
+		break;
+	}
+
+	visualWorldTransform_.scale_ = {
+	    visualSize.x * 0.5f,
+	    visualSize.y * 0.5f,
+	    visualSize.z * 0.5f,
+	};
+	visualWorldTransform_.translation_ =
+	    CalculateLocalPosition(attachedFace_, blockHalfSize_, visualSize);
+	WorldTransformUpdate(visualWorldTransform_);
 }
 
 AABB Obstacle::GetAABB() const {

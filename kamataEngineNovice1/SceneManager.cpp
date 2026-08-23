@@ -2,11 +2,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 
 using namespace KamataEngine;
 
 SceneManager::~SceneManager() {
-	delete dimCanvas_;
+	DestroyDimCanvas();
 	delete blackCanvas_;
 }
 
@@ -26,7 +27,7 @@ void SceneManager::Initialize() {
 	ResetGameScene(false);
 	titleScene_.Reset();
 	state_ = State::Title;
-	dimCanvasAlpha_ = kDimAlpha;
+	dimCanvasAlpha_ = kDimOpacity;
 	blackCanvasAlpha_ = 0.0f;
 }
 
@@ -60,7 +61,7 @@ void SceneManager::Update() {
 
 		if (gameplayStartedDuringCountdown_) {
 			gameScene_->Update(true);
-			dimCanvasAlpha_ = kDimAlpha *
+			dimCanvasAlpha_ = kDimOpacity *
 			                  (1.0f - countdownScene_.GetFinalExitProgress());
 		} else {
 			gameScene_->Update(false);
@@ -68,8 +69,7 @@ void SceneManager::Update() {
 
 		if (countdownScene_.IsFinished()) {
 			dimCanvasAlpha_ = 0.0f;
-			delete dimCanvas_;
-			dimCanvas_ = nullptr;
+			DestroyDimCanvas();
 			state_ = State::Gameplay;
 		}
 		break;
@@ -82,10 +82,10 @@ void SceneManager::Update() {
 		break;
 	case State::GameOverFade:
 		transitionTime_ += kDeltaTime;
-		dimCanvasAlpha_ = kDimAlpha * std::clamp(
+		dimCanvasAlpha_ = kDimOpacity * std::clamp(
 		    transitionTime_ / kGameOverFadeDuration, 0.0f, 1.0f);
 		if (transitionTime_ >= kGameOverFadeDuration) {
-			dimCanvasAlpha_ = kDimAlpha;
+			dimCanvasAlpha_ = kDimOpacity;
 			gameOverScene_.Start();
 			state_ = State::GameOverDisplay;
 		}
@@ -106,7 +106,7 @@ void SceneManager::Update() {
 			blackCanvasAlpha_ = 1.0f;
 			ResetGameScene(false);
 			titleScene_.Reset();
-			dimCanvasAlpha_ = kDimAlpha;
+			dimCanvasAlpha_ = kDimOpacity;
 			transitionTime_ = 0.0f;
 			state_ = State::ReturnTitleReveal;
 		}
@@ -129,7 +129,7 @@ void SceneManager::Update() {
 
 void SceneManager::Draw() {
 	gameScene_->Draw();
-	DrawCanvas(dimCanvas_, dimCanvasAlpha_);
+	DrawDimCanvas(dimCanvasAlpha_);
 
 	switch (state_) {
 	case State::Title:
@@ -168,16 +168,34 @@ void SceneManager::ResetGameScene(bool obstacleGenerationEnabled) {
 }
 
 void SceneManager::EnsureDimCanvas() {
-	if (dimCanvas_) {
+	if (dimCanvasSlices_.front()) {
 		return;
 	}
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
-	dimCanvas_ = Sprite::Create(whiteTextureHandle_, {0.0f, 0.0f});
-	assert(dimCanvas_);
-	dimCanvas_->SetSize({
-	    static_cast<float>(dxCommon->GetBackBufferWidth()),
-	    static_cast<float>(dxCommon->GetBackBufferHeight()),
-	});
+	const float screenWidth =
+	    static_cast<float>(dxCommon->GetBackBufferWidth());
+	const float screenHeight =
+	    static_cast<float>(dxCommon->GetBackBufferHeight());
+	for (std::size_t index = 0; index < kDimGradientSliceCount; ++index) {
+		const float sliceTop = std::round(
+		    screenHeight * static_cast<float>(index) /
+		    static_cast<float>(kDimGradientSliceCount));
+		const float sliceBottom = std::round(
+		    screenHeight * static_cast<float>(index + 1) /
+		    static_cast<float>(kDimGradientSliceCount));
+		dimCanvasSlices_[index] = Sprite::Create(
+		    whiteTextureHandle_, {0.0f, sliceTop});
+		assert(dimCanvasSlices_[index]);
+		dimCanvasSlices_[index]->SetSize(
+		    {screenWidth, sliceBottom - sliceTop});
+	}
+}
+
+void SceneManager::DestroyDimCanvas() {
+	for (Sprite*& slice : dimCanvasSlices_) {
+		delete slice;
+		slice = nullptr;
+	}
 }
 
 void SceneManager::EnsureBlackCanvas() {
@@ -200,6 +218,27 @@ void SceneManager::DrawCanvas(Sprite* sprite, float alpha) const {
 	sprite->SetColor({0.0f, 0.0f, 0.0f, std::clamp(alpha, 0.0f, 1.0f)});
 	Sprite::PreDraw();
 	sprite->Draw();
+	Sprite::PostDraw();
+}
+
+void SceneManager::DrawDimCanvas(float opacity) const {
+	if (!dimCanvasSlices_.front() || opacity <= 0.0f) {
+		return;
+	}
+
+	const float clampedOpacity = std::clamp(opacity, 0.0f, 1.0f);
+	Sprite::PreDraw();
+	for (std::size_t index = 0; index < kDimGradientSliceCount; ++index) {
+		const float gradientPosition =
+		    static_cast<float>(index) /
+		    static_cast<float>(kDimGradientSliceCount - 1);
+		const float gradientAlpha =
+		    kDimTopAlpha +
+		    (kDimBottomAlpha - kDimTopAlpha) * gradientPosition;
+		dimCanvasSlices_[index]->SetColor(
+		    {0.0f, 0.0f, 0.0f, gradientAlpha * clampedOpacity});
+		dimCanvasSlices_[index]->Draw();
+	}
 	Sprite::PostDraw();
 }
 

@@ -6,6 +6,8 @@
 #include "KamataEngine.h"
 #include "TitleScene.h"
 
+#include <array>
+#include <cstddef>
 #include <memory>
 
 class SceneManager {
@@ -30,10 +32,13 @@ private:
 		ReturnBlackFade,
 		ReturnTitleReveal,
 	};
+	static inline constexpr std::size_t kDimGradientSliceCount = 96;
 
 	void ResetGameScene(bool obstacleGenerationEnabled);
 	void EnsureDimCanvas();
+	void DestroyDimCanvas();
 	void EnsureBlackCanvas();
+	void DrawDimCanvas(float opacity) const;
 	void DrawCanvas(KamataEngine::Sprite* sprite, float alpha) const;
 	void BeginReturnToTitle();
 
@@ -42,17 +47,20 @@ private:
 	CountdownScene countdownScene_;
 	GameOverScene gameOverScene_;
 	KamataEngine::Camera uiCamera_;
-	KamataEngine::Sprite* dimCanvas_ = nullptr;
+	std::array<KamataEngine::Sprite*, kDimGradientSliceCount>
+	    dimCanvasSlices_ = {};
 	KamataEngine::Sprite* blackCanvas_ = nullptr;
 	uint32_t whiteTextureHandle_ = 0;
 	State state_ = State::Title;
 	float transitionTime_ = 0.0f;
-	float dimCanvasAlpha_ = 0.5f;
+	float dimCanvasAlpha_ = 1.0f;
 	float blackCanvasAlpha_ = 0.0f;
 	bool gameplayStartedDuringCountdown_ = false;
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;
-	static inline constexpr float kDimAlpha = 0.5f;
+	static inline constexpr float kDimOpacity = 1.0f;
+	static inline constexpr float kDimTopAlpha = 1.0f;
+	static inline constexpr float kDimBottomAlpha = 0.3f;
 	static inline constexpr float kGameOverFadeDuration = 0.75f;
 	static inline constexpr float kReturnBlackFadeDuration = 0.75f;
 	static inline constexpr float kReturnRevealDuration = 0.75f;

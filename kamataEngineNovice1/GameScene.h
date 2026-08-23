@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <memory>
 #include <numbers>
+#include <random>
 #include <vector>
 
 class GameScene {
@@ -105,6 +106,7 @@ private:
 	int blockedRotationFeedbackDirection_ = 0;
 	float mapMoveSpeed_ = 0.0f;
 	bool obstacleGenerationEnabled_ = true;
+	std::mt19937 obstacleVisualRandomEngine_;
 
 	static inline const std::array<BYTE, 5> kEnterDebugCommand = {
 	    DIK_L,
@@ -163,6 +165,12 @@ private:
 	    0.0f,
 	};
 	static inline const float kObstacleDetachRepulsionSpeed = 1.5f;
+	static inline const int kMinObstacleVisualHeightHundredths = 80;
+	static inline const int kMaxObstacleVisualHeightHundredths = 400;
+	static inline const float kMinObstacleVisualGrowthDuration = 2.5f;
+	static inline const float kMaxObstacleVisualGrowthDuration = 6.0f;
+	static inline const float kObstacleGrowthFinishMargin = 0.25f;
+	static inline const float kObstacleGrowthScreenMarginPixels = 96.0f;
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;

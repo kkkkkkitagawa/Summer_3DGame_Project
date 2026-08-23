@@ -197,6 +197,9 @@ void GameScene::InitializeMapBlocks() {
 	mapBlocks_.clear();
 	mapBlocks_.reserve(kMapBlockCount);
 	levelGenerator_.Reset();
+	// Keep cosmetic obstacle variations reproducible for the same level seed,
+	// without changing the level generator's gameplay random sequence.
+	obstacleVisualRandomEngine_.seed(levelGenerator_.GetSeed() ^ 0xA511E9B3u);
 	for (std::size_t index = 0; index < kMapBlockCount; ++index) {
 		const MapBlockSpawnPlan spawnPlan =
 		    !obstacleGenerationEnabled_
@@ -243,10 +246,32 @@ void GameScene::SpawnMapBlock(
 void GameScene::AttachObstacle(
     MapBlock& block, Model* model, BlockFace attachedFace,
     const Vector3& size, ObstacleInteractionRules interactionRules) {
+	std::uniform_int_distribution<int> heightDistribution(
+	    kMinObstacleVisualHeightHundredths,
+	    kMaxObstacleVisualHeightHundredths);
+	const float visualHeightScale =
+	    static_cast<float>(heightDistribution(obstacleVisualRandomEngine_)) /
+	    100.0f;
+
+	const float safeMapMoveSpeed = (std::max)(mapMoveSpeed_, 0.001f);
+	const float timeUntilPlayerOrigin = (std::max)(
+	    0.0f,
+	    (block.positionX - sceneMap_.origin.x) / safeMapMoveSpeed);
+	const float availableGrowthTime = (std::max)(
+	    kDeltaTime, timeUntilPlayerOrigin - kObstacleGrowthFinishMargin);
+	const float maximumGrowthDuration = (std::min)(
+	    kMaxObstacleVisualGrowthDuration, availableGrowthTime);
+	const float minimumGrowthDuration = (std::min)(
+	    kMinObstacleVisualGrowthDuration, maximumGrowthDuration);
+	std::uniform_real_distribution<float> durationDistribution(
+	    minimumGrowthDuration, maximumGrowthDuration);
+	const float visualGrowthDuration =
+	    durationDistribution(obstacleVisualRandomEngine_);
+
 	auto obstacle = std::make_unique<Obstacle>();
 	obstacle->Initialize(
 	    model, attachedFace, &block.worldTransform, kBlockSize * 0.5f, size,
-	    interactionRules);
+	    interactionRules, visualHeightScale, visualGrowthDuration);
 	block.obstacles.push_back(std::move(obstacle));
 }
 
@@ -391,6 +416,11 @@ float GameScene::CalculateBlockedRotationOffset() const {
 void GameScene::UpdateMapBlocks() {
 	UpdateDetachedObstacles();
 	const float blockedRotationOffset = CalculateBlockedRotationOffset();
+	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+	const float screenWidth =
+	    static_cast<float>(dxCommon->GetBackBufferWidth());
+	const float screenHeight =
+	    static_cast<float>(dxCommon->GetBackBufferHeight());
 
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 		block->positionX -= mapMoveSpeed_ * kDeltaTime;
@@ -450,8 +480,29 @@ void GameScene::UpdateMapBlocks() {
 		block->modelWorldTransform.translation_ =
 		    block->worldTransform.translation_;
 		WorldTransformUpdate(block->modelWorldTransform);
+		const float safeMapMoveSpeed = (std::max)(mapMoveSpeed_, 0.001f);
+		const float timeUntilPlayerOrigin = (std::max)(
+		    0.0f,
+		    (block->positionX - sceneMap_.origin.x) / safeMapMoveSpeed);
+		const float timeUntilGrowthDeadline = (std::max)(
+		    0.0f,
+		    timeUntilPlayerOrigin - kObstacleGrowthFinishMargin);
+		Vector2 blockScreenPosition = {};
+		const bool isBlockProjected = ProjectWorldToScreen(
+		    block->worldTransform.translation_, playerCamera_,
+		    blockScreenPosition);
+		const bool canStartObstacleGrowth =
+		    isBlockProjected &&
+		    blockScreenPosition.x >= kObstacleGrowthScreenMarginPixels &&
+		    blockScreenPosition.x <=
+		        screenWidth - kObstacleGrowthScreenMarginPixels &&
+		    blockScreenPosition.y >= kObstacleGrowthScreenMarginPixels &&
+		    blockScreenPosition.y <=
+		        screenHeight - kObstacleGrowthScreenMarginPixels;
 		for (std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
-			obstacle->Update(kDeltaTime, kGravity);
+			obstacle->Update(
+			    kDeltaTime, kGravity, timeUntilGrowthDeadline,
+			    canStartObstacleGrowth);
 			if (startedFalling) {
 				obstacle->DetachAndFall(
 				    {-mapMoveSpeed_, block->verticalVelocity, 0.0f},
@@ -492,7 +543,7 @@ void GameScene::UpdateMapBlocks() {
 
 void GameScene::UpdateDetachedObstacles() {
 	for (const std::unique_ptr<Obstacle>& obstacle : detachedObstacles_) {
-		obstacle->Update(kDeltaTime, kGravity);
+		obstacle->Update(kDeltaTime, kGravity, 0.0f, true);
 	}
 
 	const float deleteY = sceneMap_.groundHeight - kDeleteDistance;
