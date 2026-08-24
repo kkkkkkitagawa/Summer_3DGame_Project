@@ -22,6 +22,7 @@
     <ClCompile Include="Obstacle.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Skydome.cpp" />
+	<ClCompile Include="SlimeObstacle.cpp" />
     <ClCompile Include="WorldTransformUpdate.cpp" />
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp">
       <Filter>KamataEngine\Adapter</Filter>
@@ -35,6 +36,7 @@
     <ClInclude Include="Obstacle.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Skydome.h" />
+	<ClInclude Include="SlimeObstacle.h" />
     <ClInclude Include="WorldTransformUpdate.h" />
     <ClInclude Include="C:\KamataEngine\DirectXGame\audio\Audio.h">
       <Filter>KamataEngine\Include</Filter>

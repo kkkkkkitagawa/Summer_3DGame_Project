@@ -24,7 +24,13 @@ enum class LevelDifficulty : uint8_t {
 	Hard,
 };
 
+enum class ObstacleType : uint8_t {
+	Normal,
+	Slime,
+};
+
 struct ObstacleSpawnPlan {
+	ObstacleType type = ObstacleType::Normal;
 	SolverFace solverFace = SolverFace::Spawn0;
 	BlockFace attachedFace = BlockFace::Top;
 	KamataEngine::Vector3 size = {1.0f, 1.0f, 1.0f};
@@ -87,13 +93,18 @@ private:
 	    int faceIndex, int faceOffset, bool isMirrored) const;
 	BlockFace ConvertSolverFaceToBlockFace(SolverFace solverFace) const;
 	bool HasMultipleObstacleGroups(const PatternDefinition& pattern) const;
+	void RollNextSlimeInterval();
 
 	std::deque<MapBlockSpawnPlan> pendingPlans_;
 	std::mt19937 randomEngine_;
+	std::mt19937 obstacleTypeRandomEngine_;
 	uint32_t seed_ = 0;
 	LevelDifficulty difficulty_ = LevelDifficulty::Normal;
 	FaceMask reachableFaces_ = 0x01;
 	std::array<FaceMask, 2> recentObstacleMasks_ = {};
 	std::array<int, 4> straightClearBlockCounts_ = {};
 	int consecutiveEmptyBlockCount_ = 0;
+	std::size_t blocksSinceLastSlime_ = 0;
+	std::size_t nextSlimeInterval_ = 0;
+	static inline constexpr uint32_t kObstacleTypeSeedSalt = 0x51A1C0DEu;
 };

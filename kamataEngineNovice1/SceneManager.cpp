@@ -133,7 +133,7 @@ void SceneManager::Update() {
 		if (difficultyRequest) {
 			ApplyDifficultyAndReturnToTitle(*difficultyRequest);
 		}
-		fallenBlockCounter_.SetValue(
+		fallenBlockCounter_.Update(
 		    gameScene_->GetFallenMapBlockCount());
 	}
 }

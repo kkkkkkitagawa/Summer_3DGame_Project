@@ -5,6 +5,7 @@
 #include "Obstacle.h"
 #include "Player.h"
 #include "Skydome.h"
+#include "SlimeObstacle.h"
 
 #include <array>
 #include <cstddef>
@@ -44,6 +45,7 @@ private:
 		float collisionRotationX = 0.0f;
 		bool isFalling = false;
 		std::vector<std::unique_ptr<Obstacle>> obstacles;
+		std::vector<std::unique_ptr<SlimeObstacle>> slimeObstacles;
 	};
 
 	void InitializeMapBlocks();
@@ -61,10 +63,14 @@ private:
 	    MapBlock& block, KamataEngine::Model* model, BlockFace attachedFace,
 	    const KamataEngine::Vector3& size,
 	    ObstacleInteractionRules interactionRules);
+	void AttachSlimeObstacle(MapBlock& block, BlockFace attachedFace);
 	KamataEngine::Matrix4x4 CreateMapBlockLogicalTransform(
 	    const MapBlock& block, float rotationX) const;
 	AABB GetObstacleLogicalAABB(
 	    const MapBlock& block, const Obstacle& obstacle,
+	    float rotationX) const;
+	AABB GetSlimeObstacleLogicalAABB(
+	    const MapBlock& block, const SlimeObstacle& obstacle,
 	    float rotationX) const;
 	float CalculateShakeStrength(float positionX) const;
 	void DrawMapBlocks();
@@ -89,12 +95,15 @@ private:
 	KamataEngine::Model* modelSkydome_ = nullptr;
 	KamataEngine::Model* modelPlayer_ = nullptr;
 	KamataEngine::Model* modelObstacle_ = nullptr;
+	KamataEngine::Model* modelSlimeInner_ = nullptr;
+	KamataEngine::Model* modelSlimeOuter_ = nullptr;
 	Skydome* skydome_ = nullptr;
 	Player* player_ = nullptr;
 	KamataEngine::Sprite* mouseCircleSprite_ = nullptr;
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
 	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
+	std::vector<std::unique_ptr<SlimeObstacle>> detachedSlimeObstacles_;
 	// SceneManagerで選択された難度の生成規則と採用済みシードを使用する。
 	LevelGenerator levelGenerator_;
 
@@ -119,6 +128,8 @@ private:
 	float mapMoveSpeed_ = 0.0f;
 	bool obstacleGenerationEnabled_ = true;
 	std::mt19937 obstacleVisualRandomEngine_;
+	uint32_t slimeInnerTextureHandle_ = 0;
+	uint32_t slimeOuterTextureHandle_ = 0;
 	std::string difficultyCommandInput_;
 	std::optional<LevelDifficulty> difficultyChangeRequest_;
 
@@ -182,6 +193,8 @@ private:
 	    0.0f,
 	};
 	static inline const float kObstacleDetachRepulsionSpeed = 1.5f;
+	static inline constexpr float kSlimeKnockbackDistance = 1.5f;
+	static inline constexpr float kSlimeKnockbackDuration = 0.25f;
 	static inline const int kMinObstacleVisualHeightHundredths = 80;
 	static inline const int kMaxObstacleVisualHeightHundredths = 400;
 	static inline const float kMinObstacleVisualGrowthDuration = 2.5f;

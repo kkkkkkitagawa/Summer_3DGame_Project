@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 
 void Player::Initialize(
     KamataEngine::Model* model, const KamataEngine::Vector3& position,
@@ -29,9 +30,24 @@ void Player::Initialize(
 
 void Player::Update(
     float forwardSpeed, float maximumPositionX, float deltaTime) {
-	worldTransform_.translation_.x = (std::min)(
-	    maximumPositionX,
-	    worldTransform_.translation_.x + forwardSpeed * deltaTime);
+	if (isKnockbackActive_) {
+		knockbackElapsed_ =
+		    (std::min)(knockbackElapsed_ + deltaTime, knockbackDuration_);
+		const float progress = std::clamp(
+		    knockbackElapsed_ / knockbackDuration_, 0.0f, 1.0f);
+		const float inverseProgress = 1.0f - progress;
+		const float easedProgress =
+		    1.0f - inverseProgress * inverseProgress * inverseProgress;
+		worldTransform_.translation_.x =
+		    knockbackStartX_ - knockbackDistance_ * easedProgress;
+		if (progress >= 1.0f) {
+			isKnockbackActive_ = false;
+		}
+	} else {
+		worldTransform_.translation_.x = (std::min)(
+		    maximumPositionX,
+		    worldTransform_.translation_.x + forwardSpeed * deltaTime);
+	}
 	UpdateTransforms();
 }
 
@@ -60,6 +76,16 @@ AABB Player::GetAABB() const {
 void Player::SetPositionX(float positionX) {
 	worldTransform_.translation_.x = positionX;
 	UpdateTransforms();
+}
+
+void Player::StartKnockback(float distance, float duration) {
+	assert(distance > 0.0f);
+	assert(duration > 0.0f);
+	knockbackStartX_ = worldTransform_.translation_.x;
+	knockbackDistance_ = distance;
+	knockbackDuration_ = duration;
+	knockbackElapsed_ = 0.0f;
+	isKnockbackActive_ = true;
 }
 
 void Player::UpdateTransforms() {

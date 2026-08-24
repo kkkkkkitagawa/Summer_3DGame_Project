@@ -16,6 +16,8 @@ public:
 	KamataEngine::Vector3 GetWorldPosition() const;
 	AABB GetAABB() const;
 	void SetPositionX(float positionX);
+	void StartKnockback(float distance, float duration);
+	bool IsKnockbackActive() const { return isKnockbackActive_; }
 
 	static inline constexpr float kCollisionScale = 0.9f;
 	static inline const KamataEngine::Vector3 kCollisionHalfSize = {
@@ -35,4 +37,9 @@ private:
 	KamataEngine::WorldTransform worldTransform_;
 	KamataEngine::WorldTransform outlineWorldTransform_;
 	KamataEngine::Model* model_ = nullptr;
+	float knockbackStartX_ = 0.0f;
+	float knockbackDistance_ = 0.0f;
+	float knockbackDuration_ = 0.0f;
+	float knockbackElapsed_ = 0.0f;
+	bool isKnockbackActive_ = false;
 };

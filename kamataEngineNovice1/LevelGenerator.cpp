@@ -82,15 +82,23 @@ void LevelGenerator::Reset() {
 void LevelGenerator::Reset(uint32_t seed) {
 	seed_ = seed;
 	randomEngine_.seed(seed_);
+	// Obstacle types use an independent stream so choosing a slime never changes
+	// the accepted seed's face layout or later random patterns.
+	obstacleTypeRandomEngine_.seed(seed_ ^ kObstacleTypeSeedSalt);
 	pendingPlans_.clear();
 	// ゲーム開始時点のプレイヤー面は0度。
 	reachableFaces_ = 0x01;
 	recentObstacleMasks_ = {};
 	straightClearBlockCounts_ = {};
 	consecutiveEmptyBlockCount_ = 0;
+	blocksSinceLastSlime_ = 0;
+	RollNextSlimeInterval();
 }
 
 MapBlockSpawnPlan LevelGenerator::CreateInitialBlockPlan() {
+	if (difficulty_ != LevelDifficulty::Easy) {
+		++blocksSinceLastSlime_;
+	}
 	// 初期マップブロックは空。空ブロック中のA/D移動も求解状態へ反映する。
 	reachableFaces_ =
 	    AdvanceReachableFaces(reachableFaces_, recentObstacleMasks_[0] |
@@ -290,6 +298,8 @@ bool LevelGenerator::TryQueuePattern(
 		return false;
 	}
 
+	std::vector<MapBlockSpawnPlan> queuedPlans;
+	queuedPlans.reserve(kPatternLength);
 	for (FaceMask rawFaceMask : pattern) {
 		MapBlockSpawnPlan blockPlan;
 		const FaceMask transformedFaceMask =
@@ -306,6 +316,50 @@ bool LevelGenerator::TryQueuePattern(
 			    ConvertSolverFaceToBlockFace(obstaclePlan.solverFace);
 			blockPlan.obstacles.push_back(obstaclePlan);
 		}
+		queuedPlans.push_back(std::move(blockPlan));
+	}
+
+	// Slime frequency is measured in map blocks. Once its seeded interval is
+	// reached, wait for a single-obstacle block whose face is also clear on the
+	// immediately preceding block. A normal obstacle may follow it, but the slime
+	// itself will not be placed in the middle of an existing wall.
+	auto createFaceMask = [](const MapBlockSpawnPlan& blockPlan) {
+		FaceMask faceMask = 0;
+		for (const ObstacleSpawnPlan& obstaclePlan : blockPlan.obstacles) {
+			faceMask = static_cast<FaceMask>(
+			    faceMask |
+			    static_cast<FaceMask>(
+			        1u << static_cast<int>(obstaclePlan.solverFace)));
+		}
+		return faceMask;
+	};
+	for (std::size_t blockIndex = 0; blockIndex < queuedPlans.size();
+	     ++blockIndex) {
+		if (difficulty_ == LevelDifficulty::Easy) {
+			break;
+		}
+		++blocksSinceLastSlime_;
+		MapBlockSpawnPlan& blockPlan = queuedPlans[blockIndex];
+		if (blocksSinceLastSlime_ < nextSlimeInterval_ ||
+		    blockPlan.obstacles.size() != 1) {
+			continue;
+		}
+
+		const FaceMask slimeFace = static_cast<FaceMask>(
+		    1u << static_cast<int>(
+		              blockPlan.obstacles.front().solverFace));
+		const FaceMask previousFaceMask =
+		    blockIndex == 0 ? recentObstacleMasks_[0]
+		                    : createFaceMask(queuedPlans[blockIndex - 1]);
+		if ((previousFaceMask & slimeFace) != 0) {
+			continue;
+		}
+
+		blockPlan.obstacles.front().type = ObstacleType::Slime;
+		blocksSinceLastSlime_ = 0;
+		RollNextSlimeInterval();
+	}
+	for (MapBlockSpawnPlan& blockPlan : queuedPlans) {
 		pendingPlans_.push_back(std::move(blockPlan));
 	}
 	reachableFaces_ = result.reachableFaces;
@@ -473,4 +527,24 @@ bool LevelGenerator::HasMultipleObstacleGroups(
 		previousBlockWasOccupied = isOccupied;
 	}
 	return groupCount >= 2;
+}
+
+void LevelGenerator::RollNextSlimeInterval() {
+	switch (difficulty_) {
+	case LevelDifficulty::Easy:
+		nextSlimeInterval_ = 0;
+		return;
+	case LevelDifficulty::Normal: {
+		std::uniform_int_distribution<std::size_t> intervalDistribution(17, 20);
+		nextSlimeInterval_ =
+		    intervalDistribution(obstacleTypeRandomEngine_);
+		return;
+	}
+	case LevelDifficulty::Hard: {
+		std::uniform_int_distribution<std::size_t> intervalDistribution(12, 15);
+		nextSlimeInterval_ =
+		    intervalDistribution(obstacleTypeRandomEngine_);
+		return;
+	}
+	}
 }

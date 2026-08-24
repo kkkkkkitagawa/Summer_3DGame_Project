@@ -129,9 +129,12 @@ GameScene::GameScene(LevelDifficulty difficulty)
 GameScene::~GameScene() {
 	mapBlocks_.clear();
 	detachedObstacles_.clear();
+	detachedSlimeObstacles_.clear();
 	delete player_;
 	delete modelPlayer_;
 	delete modelObstacle_;
+	delete modelSlimeInner_;
+	delete modelSlimeOuter_;
 	delete skydome_;
 	delete modelSkydome_;
 	delete modelBlock_;
@@ -166,6 +169,14 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	assert(modelBlock_);
 	modelObstacle_ = Model::CreateFromOBJ("cube", true);
 	assert(modelObstacle_);
+	modelSlimeInner_ = Model::CreateFromOBJ("SlimeInner", false);
+	assert(modelSlimeInner_);
+	modelSlimeOuter_ = Model::CreateFromOBJ("SlimeOuter", false);
+	assert(modelSlimeOuter_);
+	slimeInnerTextureHandle_ =
+	    TextureManager::Load("SlimeCube/Inner.png");
+	slimeOuterTextureHandle_ =
+	    TextureManager::Load("SlimeCube/Outer.png");
 	outlineColor_.Initialize();
 	outlineColor_.SetColor({0.0f, 0.0f, 0.0f, 1.0f});
 	InitializeMapBlocks();
@@ -192,8 +203,8 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 
 	playerCamera_.farZ = 1000.0f;
 	playerCamera_.Initialize();
-	playerCamera_.translation_ = {-3.553f, 8.184f, -9.808f};
-	playerCamera_.rotation_ = {0.685042f, 0.400029f, 0.0f};
+	playerCamera_.translation_ = {-3.269f, 7.610f, -10.224f};
+	playerCamera_.rotation_ = {0.519934f, 0.404916f, 0.0f};
 	playerCamera_.UpdateMatrix();
 
 	debugCamera_.farZ = 1000.0f;
@@ -303,9 +314,16 @@ void GameScene::SpawnMapBlock(
 	block->outlineWorldTransform.translation_ = block->worldTransform.translation_;
 	WorldTransformUpdate(block->outlineWorldTransform);
 	for (const ObstacleSpawnPlan& obstaclePlan : spawnPlan.obstacles) {
-		AttachObstacle(
-		    *block, modelObstacle_, obstaclePlan.attachedFace,
-		    obstaclePlan.size, obstaclePlan.interactionRules);
+		switch (obstaclePlan.type) {
+		case ObstacleType::Normal:
+			AttachObstacle(
+			    *block, modelObstacle_, obstaclePlan.attachedFace,
+			    obstaclePlan.size, obstaclePlan.interactionRules);
+			break;
+		case ObstacleType::Slime:
+			AttachSlimeObstacle(*block, obstaclePlan.attachedFace);
+			break;
+		}
 	}
 	mapBlocks_.push_back(std::move(block));
 }
@@ -343,6 +361,17 @@ void GameScene::AttachObstacle(
 	block.obstacles.push_back(std::move(obstacle));
 }
 
+void GameScene::AttachSlimeObstacle(
+    MapBlock& block, BlockFace attachedFace) {
+	auto obstacle = std::make_unique<SlimeObstacle>();
+	obstacle->Initialize(
+	    modelSlimeInner_, modelSlimeOuter_, slimeInnerTextureHandle_,
+	    slimeOuterTextureHandle_, obstacleVisualRandomEngine_(), attachedFace,
+	    &block.worldTransform,
+	    kBlockSize * 0.5f, {kBlockSize, kBlockSize, kBlockSize});
+	block.slimeObstacles.push_back(std::move(obstacle));
+}
+
 Matrix4x4 GameScene::CreateMapBlockLogicalTransform(
     const MapBlock& block, float rotationX) const {
 	Matrix4x4 logicalTransform =
@@ -362,6 +391,13 @@ Matrix4x4 GameScene::CreateMapBlockLogicalTransform(
 
 AABB GameScene::GetObstacleLogicalAABB(
     const MapBlock& block, const Obstacle& obstacle, float rotationX) const {
+	return obstacle.GetAABBForParentTransform(
+	    CreateMapBlockLogicalTransform(block, rotationX));
+}
+
+AABB GameScene::GetSlimeObstacleLogicalAABB(
+    const MapBlock& block, const SlimeObstacle& obstacle,
+    float rotationX) const {
 	return obstacle.GetAABBForParentTransform(
 	    CreateMapBlockLogicalTransform(block, rotationX));
 }
@@ -582,6 +618,24 @@ void GameScene::UpdateMapBlocks() {
 				detachedObstacles_.push_back(std::move(obstacle));
 			}
 		}
+		for (auto iterator = block->slimeObstacles.begin();
+		     iterator != block->slimeObstacles.end();) {
+			SlimeObstacle& slime = **iterator;
+			slime.Update(kDeltaTime, kGravity);
+			if (slime.IsDead()) {
+				iterator = block->slimeObstacles.erase(iterator);
+				continue;
+			}
+			if (startedFalling) {
+				slime.DetachAndFall(
+				    {-mapMoveSpeed_, block->verticalVelocity, 0.0f},
+				    kObstacleDetachRepulsionSpeed);
+				detachedSlimeObstacles_.push_back(std::move(*iterator));
+				iterator = block->slimeObstacles.erase(iterator);
+				continue;
+			}
+			++iterator;
+		}
 		if (startedFalling) {
 			block->obstacles.clear();
 		}
@@ -629,10 +683,59 @@ void GameScene::UpdateDetachedObstacles() {
 		        return obstacle->GetWorldPosition().y < deleteY;
 	        }),
 	    detachedObstacles_.end());
+
+	for (const std::unique_ptr<SlimeObstacle>& obstacle :
+	     detachedSlimeObstacles_) {
+		obstacle->Update(kDeltaTime, kGravity);
+	}
+	detachedSlimeObstacles_.erase(
+	    std::remove_if(
+	        detachedSlimeObstacles_.begin(),
+	        detachedSlimeObstacles_.end(),
+	        [deleteY](const std::unique_ptr<SlimeObstacle>& obstacle) {
+		        return obstacle->IsDead() ||
+		               obstacle->GetWorldPosition().y < deleteY;
+	        }),
+	    detachedSlimeObstacles_.end());
 }
 
 void GameScene::ResolvePlayerObstacleCollisions() {
 	AABB playerAABB = player_->GetAABB();
+	bool slimeTriggered = false;
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		if (block->isFalling) {
+			continue;
+		}
+		for (const std::unique_ptr<SlimeObstacle>& slime :
+		     block->slimeObstacles) {
+			if (!slime->IsCollisionEnabled() ||
+			    slime->GetSurfaceRelation(
+			        block->collisionRotationX, kPlayerSurfaceNormal) !=
+			        ObstacleSurfaceRelation::PlayerFace) {
+				continue;
+			}
+
+			const AABB slimeAABB = GetSlimeObstacleLogicalAABB(
+			    *block, *slime, block->collisionRotationX);
+			const float slimeCenterX =
+			    (slimeAABB.min.x + slimeAABB.max.x) * 0.5f;
+			if (!IsCollision(playerAABB, slimeAABB) ||
+			    slimeCenterX < player_->GetWorldPosition().x) {
+				continue;
+			}
+
+			if (slime->TriggerHit()) {
+				player_->StartKnockback(
+				    kSlimeKnockbackDistance, kSlimeKnockbackDuration);
+				slimeTriggered = true;
+				break;
+			}
+		}
+		if (slimeTriggered) {
+			break;
+		}
+	}
+
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			const ObstacleInteractionRules& rules =
@@ -651,13 +754,16 @@ void GameScene::ResolvePlayerObstacleCollisions() {
 			    *block, *obstacle, block->collisionRotationX);
 			const float obstacleCenterX =
 			    (obstacleAABB.min.x + obstacleAABB.max.x) * 0.5f;
-			if (!IsCollision(playerAABB, obstacleAABB) ||
-			    obstacleCenterX < player_->GetWorldPosition().x) {
+			if (!IsCollision(playerAABB, obstacleAABB)) {
 				continue;
 			}
 
+			const float correctedPlayerX =
+			    obstacleCenterX >= player_->GetWorldPosition().x
+			        ? obstacleAABB.min.x - Player::kCollisionHalfSize.x
+			        : obstacleAABB.max.x + Player::kCollisionHalfSize.x;
 			player_->SetPositionX(
-			    obstacleAABB.min.x - Player::kCollisionHalfSize.x);
+			    (std::min)(sceneMap_.origin.x, correctedPlayerX));
 			playerAABB = player_->GetAABB();
 		}
 	}
@@ -1020,9 +1126,34 @@ void GameScene::DrawMapBlocks() {
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			obstacle->Draw(camera);
 		}
+		for (const std::unique_ptr<SlimeObstacle>& slime :
+		     block->slimeObstacles) {
+			slime->DrawInner(camera);
+		}
 	}
 	for (const std::unique_ptr<Obstacle>& obstacle : detachedObstacles_) {
 		obstacle->Draw(camera);
+	}
+	for (const std::unique_ptr<SlimeObstacle>& slime :
+	     detachedSlimeObstacles_) {
+		slime->DrawInner(camera);
+	}
+	Model::PostDraw();
+
+	// The translucent shell is drawn after the opaque inner cube and does not
+	// write depth, so the inner layer remains visible through it.
+	Model::PreDraw(
+	    Model::CullingMode::kBack, Model::BlendMode::kNormal,
+	    Model::DepthTestMode::kReadOnly);
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		for (const std::unique_ptr<SlimeObstacle>& slime :
+		     block->slimeObstacles) {
+			slime->DrawOuter(camera);
+		}
+	}
+	for (const std::unique_ptr<SlimeObstacle>& slime :
+	     detachedSlimeObstacles_) {
+		slime->DrawOuter(camera);
 	}
 	Model::PostDraw();
 }
@@ -1059,6 +1190,16 @@ void GameScene::DrawObstacleCollisionBoxes() {
 			DrawCollisionBox(
 			    GetObstacleLogicalAABB(
 			        *block, *obstacle, block->collisionRotationX),
+			    color);
+		}
+		for (const std::unique_ptr<SlimeObstacle>& slime :
+		     block->slimeObstacles) {
+			if (!slime->IsCollisionEnabled()) {
+				continue;
+			}
+			DrawCollisionBox(
+			    GetSlimeObstacleLogicalAABB(
+			        *block, *slime, block->collisionRotationX),
 			    color);
 		}
 	}

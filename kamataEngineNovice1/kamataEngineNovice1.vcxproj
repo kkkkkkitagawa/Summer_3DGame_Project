@@ -178,6 +178,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
     <ClCompile Include="Obstacle.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Skydome.cpp" />
+	<ClCompile Include="SlimeObstacle.cpp" />
 	<ClCompile Include="SceneManager.cpp" />
 	<ClCompile Include="TitleScene.cpp" />
     <ClCompile Include="WorldTransformUpdate.cpp" />
@@ -193,6 +194,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
     <ClInclude Include="Obstacle.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Skydome.h" />
+	<ClInclude Include="SlimeObstacle.h" />
 	<ClInclude Include="SceneManager.h" />
 	<ClInclude Include="TitleScene.h" />
     <ClInclude Include="WorldTransformUpdate.h" />
