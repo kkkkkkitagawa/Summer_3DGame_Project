@@ -181,7 +181,7 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	outlineColor_.SetColor({0.0f, 0.0f, 0.0f, 1.0f});
 	InitializeMapBlocks();
 
-	modelPlayer_ = Model::CreateFromOBJ("playerTest", true);
+	modelPlayer_ = Model::CreateFromOBJ("player", true);
 	assert(modelPlayer_);
 	player_ = new Player();
 	const Vector3 playerPosition = {
@@ -242,7 +242,8 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 void GameScene::Update(bool allowMapRotationInput) {
 	skydome_->Update();
 	player_->Update(
-	    kInitialMapMoveSpeed, sceneMap_.origin.x, kDeltaTime);
+	    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier,
+	    sceneMap_.origin.x, kDeltaTime);
 	if (allowMapRotationInput) {
 		UpdateMapRotationInput();
 	}
@@ -409,6 +410,7 @@ void GameScene::UpdateMapRotationInput() {
 	if (rotateLeft == rotateRight) {
 		return;
 	}
+	player_->StartTurnJump();
 
 	const int turnDirection = rotateLeft ? 1 : -1;
 	if (IsMapRotationDestinationBlocked(turnDirection, 1)) {

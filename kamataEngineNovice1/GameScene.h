@@ -180,9 +180,9 @@ private:
 	static inline const float kCoordinateTickHalfLength =
 	    6.0f / kPixelsPerWorldUnit;
 	static inline const float kInitialMapMoveSpeed = 2.0f;
-	static inline const float kEasyMapMoveSpeedMultiplier = 0.9f;
-	static inline const float kNormalMapMoveSpeedMultiplier = 1.0f;
-	static inline const float kHardMapMoveSpeedMultiplier = 1.3f;
+	static inline const float kEasyMapMoveSpeedMultiplier = 1.0f;
+	static inline const float kNormalMapMoveSpeedMultiplier = 1.3f;
+	static inline const float kHardMapMoveSpeedMultiplier = 1.6f;
 	static inline const float kMapRotationDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackAngle =
