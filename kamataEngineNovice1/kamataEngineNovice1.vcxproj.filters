@@ -16,6 +16,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+	<ClCompile Include="FallenBlockCounter.cpp" />
     <ClCompile Include="GameScene.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Obstacle.cpp" />
@@ -27,6 +28,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+	<ClInclude Include="FallenBlockCounter.h" />
     <ClInclude Include="GameData.h" />
     <ClInclude Include="GameScene.h" />
     <ClInclude Include="Collision.h" />

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CountdownScene.h"
+#include "FallenBlockCounter.h"
 #include "GameOverScene.h"
 #include "GameScene.h"
 #include "KamataEngine.h"
@@ -41,11 +42,13 @@ private:
 	void DrawDimCanvas(float opacity) const;
 	void DrawCanvas(KamataEngine::Sprite* sprite, float alpha) const;
 	void BeginReturnToTitle();
+	void ApplyDifficultyAndReturnToTitle(LevelDifficulty difficulty);
 
 	std::unique_ptr<GameScene> gameScene_;
 	TitleScene titleScene_;
 	CountdownScene countdownScene_;
 	GameOverScene gameOverScene_;
+	FallenBlockCounter fallenBlockCounter_;
 	KamataEngine::Camera uiCamera_;
 	std::array<KamataEngine::Sprite*, kDimGradientSliceCount>
 	    dimCanvasSlices_ = {};
@@ -56,6 +59,7 @@ private:
 	float dimCanvasAlpha_ = 1.0f;
 	float blackCanvasAlpha_ = 0.0f;
 	bool gameplayStartedDuringCountdown_ = false;
+	LevelDifficulty selectedDifficulty_ = LevelDifficulty::Hard;
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;
 	static inline constexpr float kDimOpacity = 1.0f;

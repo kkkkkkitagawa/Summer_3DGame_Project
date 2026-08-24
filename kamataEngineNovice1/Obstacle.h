@@ -28,7 +28,7 @@ public:
 	    KamataEngine::WorldTransform* parent, float blockHalfSize,
 	    const KamataEngine::Vector3& size,
 	    ObstacleInteractionRules interactionRules, float visualHeightScale,
-	    float visualGrowthDuration);
+	    float visualGrowthDuration, float outlineThickness);
 	void Update(
 	    float deltaTime, float gravity, float timeUntilGrowthDeadline,
 	    bool canStartVisualGrowth);
@@ -36,6 +36,9 @@ public:
 	    const KamataEngine::Vector3& inheritedVelocity,
 	    float repulsionSpeed);
 	void Draw(const KamataEngine::Camera& camera) const;
+	void DrawOutline(
+	    const KamataEngine::Camera& camera,
+	    const KamataEngine::ObjectColor& outlineColor) const;
 
 	AABB GetAABB() const;
 	AABB GetAABBForParentTransform(
@@ -64,6 +67,7 @@ private:
 	AABB CalculateAABB(const KamataEngine::Matrix4x4& worldTransform) const;
 	KamataEngine::WorldTransform worldTransform_;
 	KamataEngine::WorldTransform visualWorldTransform_;
+	KamataEngine::WorldTransform outlineWorldTransform_;
 	KamataEngine::Model* model_ = nullptr;
 	BlockFace attachedFace_ = BlockFace::Top;
 	ObstacleInteractionRules interactionRules_;
@@ -73,6 +77,7 @@ private:
 	float visualHeightScale_ = 1.0f;
 	float visualGrowthDuration_ = 1.0f;
 	float visualGrowthElapsed_ = 0.0f;
+	float outlineThickness_ = 0.0f;
 	bool isVisualGrowthStarted_ = false;
 	bool isCollisionEnabled_ = true;
 	bool isFalling_ = false;

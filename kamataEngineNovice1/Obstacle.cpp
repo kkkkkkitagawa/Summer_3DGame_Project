@@ -11,12 +11,13 @@ void Obstacle::Initialize(
     Model* model, BlockFace attachedFace, WorldTransform* parent,
     float blockHalfSize, const Vector3& size,
     ObstacleInteractionRules interactionRules, float visualHeightScale,
-    float visualGrowthDuration) {
+    float visualGrowthDuration, float outlineThickness) {
 	assert(model);
 	assert(parent);
 	assert(size.x > 0.0f && size.y > 0.0f && size.z > 0.0f);
 	assert(visualHeightScale > 0.0f);
 	assert(visualGrowthDuration > 0.0f);
+	assert(outlineThickness >= 0.0f);
 
 	model_ = model;
 	attachedFace_ = attachedFace;
@@ -26,6 +27,7 @@ void Obstacle::Initialize(
 	visualHeightScale_ = visualHeightScale;
 	visualGrowthDuration_ = visualGrowthDuration;
 	visualGrowthElapsed_ = 0.0f;
+	outlineThickness_ = outlineThickness;
 	worldTransform_.Initialize();
 	worldTransform_.parent_ = parent;
 	// Resources/cube has local bounds from -1 to +1 on every axis.
@@ -36,6 +38,8 @@ void Obstacle::Initialize(
 
 	visualWorldTransform_.Initialize();
 	visualWorldTransform_.parent_ = parent;
+	outlineWorldTransform_.Initialize();
+	outlineWorldTransform_.parent_ = parent;
 	UpdateVisualTransform();
 }
 
@@ -55,8 +59,12 @@ void Obstacle::Update(
 		visualWorldTransform_.translation_.x += movement.x;
 		visualWorldTransform_.translation_.y += movement.y;
 		visualWorldTransform_.translation_.z += movement.z;
+		outlineWorldTransform_.translation_.x += movement.x;
+		outlineWorldTransform_.translation_.y += movement.y;
+		outlineWorldTransform_.translation_.z += movement.z;
 		WorldTransformUpdate(worldTransform_);
 		WorldTransformUpdate(visualWorldTransform_);
+		WorldTransformUpdate(outlineWorldTransform_);
 		return;
 	}
 
@@ -95,6 +103,11 @@ void Obstacle::DetachAndFall(
 	    visualWorldTransform_.matWorld_.m[3][1],
 	    visualWorldTransform_.matWorld_.m[3][2],
 	};
+	const Vector3 outlineWorldPosition = {
+	    outlineWorldTransform_.matWorld_.m[3][0],
+	    outlineWorldTransform_.matWorld_.m[3][1],
+	    outlineWorldTransform_.matWorld_.m[3][2],
+	};
 
 	worldTransform_.parent_ = nullptr;
 	worldTransform_.translation_ = worldPosition;
@@ -102,6 +115,9 @@ void Obstacle::DetachAndFall(
 	visualWorldTransform_.parent_ = nullptr;
 	visualWorldTransform_.translation_ = visualWorldPosition;
 	visualWorldTransform_.rotation_ = parent->rotation_;
+	outlineWorldTransform_.parent_ = nullptr;
+	outlineWorldTransform_.translation_ = outlineWorldPosition;
+	outlineWorldTransform_.rotation_ = parent->rotation_;
 	velocity_ = {
 	    inheritedVelocity.x + outwardNormal.x * repulsionSpeed,
 	    inheritedVelocity.y + outwardNormal.y * repulsionSpeed,
@@ -111,10 +127,16 @@ void Obstacle::DetachAndFall(
 	isFalling_ = true;
 	WorldTransformUpdate(worldTransform_);
 	WorldTransformUpdate(visualWorldTransform_);
+	WorldTransformUpdate(outlineWorldTransform_);
 }
 
 void Obstacle::Draw(const Camera& camera) const {
 	model_->Draw(visualWorldTransform_, camera);
+}
+
+void Obstacle::DrawOutline(
+    const Camera& camera, const ObjectColor& outlineColor) const {
+	model_->Draw(outlineWorldTransform_, camera, &outlineColor);
 }
 
 void Obstacle::UpdateVisualTransform() {
@@ -145,6 +167,18 @@ void Obstacle::UpdateVisualTransform() {
 	visualWorldTransform_.translation_ =
 	    CalculateLocalPosition(attachedFace_, blockHalfSize_, visualSize);
 	WorldTransformUpdate(visualWorldTransform_);
+
+	// Grow the outline thickness with the presentation so a black slab does not
+	// appear while the obstacle itself is still visually flat.
+	const float outlineExpansion = outlineThickness_ * smoothProgress;
+	outlineWorldTransform_.scale_ = {
+	    visualWorldTransform_.scale_.x + outlineExpansion,
+	    visualWorldTransform_.scale_.y + outlineExpansion,
+	    visualWorldTransform_.scale_.z + outlineExpansion,
+	};
+	outlineWorldTransform_.translation_ = visualWorldTransform_.translation_;
+	outlineWorldTransform_.rotation_ = visualWorldTransform_.rotation_;
+	WorldTransformUpdate(outlineWorldTransform_);
 }
 
 AABB Obstacle::GetAABB() const {

@@ -10,22 +10,31 @@
 #include <cstddef>
 #include <memory>
 #include <numbers>
+#include <optional>
 #include <random>
+#include <string>
 #include <vector>
 
 class GameScene {
 public:
+	explicit GameScene(
+	    LevelDifficulty difficulty = LevelDifficulty::Hard);
 	~GameScene();
 
 	void Initialize(bool obstacleGenerationEnabled = true);
 	void Update(bool allowMapRotationInput = true);
 	void Draw();
 	bool IsDebugMode() const { return isDebugMode_; }
+	std::size_t GetFallenMapBlockCount() const {
+		return fallenMapBlockCount_;
+	}
+	std::optional<LevelDifficulty> ConsumeDifficultyChangeRequest();
 
 private:
 	struct MapBlock {
 		KamataEngine::WorldTransform worldTransform;
 		KamataEngine::WorldTransform modelWorldTransform;
+		KamataEngine::WorldTransform outlineWorldTransform;
 		float positionX = 0.0f;
 		float positionY = 0.0f;
 		float verticalVelocity = 0.0f;
@@ -60,6 +69,7 @@ private:
 	float CalculateShakeStrength(float positionX) const;
 	void DrawMapBlocks();
 	void UpdateDebugCommand();
+	void UpdateDifficultyCommand();
 	void DrawDebugInfo();
 	void UpdateCamera();
 	void UpdateAxisIndicatorCamera();
@@ -85,11 +95,12 @@ private:
 	KamataEngine::PrimitiveDrawer* primitiveDrawer_ = nullptr;
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
 	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
-	// 現在は試験用に難しい難度を生成する。採用済みの簡単難度シードは保持する。
-	LevelGenerator levelGenerator_{LevelDifficulty::Hard};
+	// SceneManagerで選択された難度の生成規則と採用済みシードを使用する。
+	LevelGenerator levelGenerator_;
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
+	KamataEngine::ObjectColor outlineColor_;
 	KamataEngine::Camera playerCamera_;
 	KamataEngine::Camera debugCamera_;
 	KamataEngine::Camera axisIndicatorCamera_;
@@ -101,12 +112,15 @@ private:
 
 	bool isDebugMode_ = false;
 	std::size_t debugCommandIndex_ = 0;
+	std::size_t fallenMapBlockCount_ = 0;
 	int mapRotationQuarterTurns_ = 0;
 	float blockedRotationFeedbackTime_ = 0.0f;
 	int blockedRotationFeedbackDirection_ = 0;
 	float mapMoveSpeed_ = 0.0f;
 	bool obstacleGenerationEnabled_ = true;
 	std::mt19937 obstacleVisualRandomEngine_;
+	std::string difficultyCommandInput_;
+	std::optional<LevelDifficulty> difficultyChangeRequest_;
 
 	static inline const std::array<BYTE, 5> kEnterDebugCommand = {
 	    DIK_L,
@@ -155,6 +169,9 @@ private:
 	static inline const float kCoordinateTickHalfLength =
 	    6.0f / kPixelsPerWorldUnit;
 	static inline const float kInitialMapMoveSpeed = 2.0f;
+	static inline const float kEasyMapMoveSpeedMultiplier = 0.9f;
+	static inline const float kNormalMapMoveSpeedMultiplier = 1.0f;
+	static inline const float kHardMapMoveSpeedMultiplier = 1.3f;
 	static inline const float kMapRotationDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackDuration = 0.18f;
 	static inline const float kBlockedRotationFeedbackAngle =
@@ -171,6 +188,15 @@ private:
 	static inline const float kMaxObstacleVisualGrowthDuration = 6.0f;
 	static inline const float kObstacleGrowthFinishMargin = 0.25f;
 	static inline const float kObstacleGrowthScreenMarginPixels = 96.0f;
+	static inline const float kObstacleOutlineThicknessPixels = 1.0f;
+	static inline const float kObstacleOutlineThickness =
+	    kObstacleOutlineThicknessPixels / kPixelsPerWorldUnit;
+	static inline const float kPlayerOutlineThicknessPixels = 2.0f;
+	static inline const float kPlayerOutlineThickness =
+	    kPlayerOutlineThicknessPixels / kPixelsPerWorldUnit;
+	static inline const float kMapOutlineThicknessPixels = 1.0f;
+	static inline const float kMapOutlineThickness =
+	    kMapOutlineThicknessPixels / kPixelsPerWorldUnit;
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;

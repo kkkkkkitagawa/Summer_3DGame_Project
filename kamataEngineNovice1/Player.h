@@ -5,9 +5,13 @@
 class Player {
 public:
 	void Initialize(
-	    KamataEngine::Model* model, const KamataEngine::Vector3& position);
+	    KamataEngine::Model* model, const KamataEngine::Vector3& position,
+	    float outlineThickness);
 	void Update(float forwardSpeed, float maximumPositionX, float deltaTime);
 	void Draw(const KamataEngine::Camera& camera) const;
+	void DrawOutline(
+	    const KamataEngine::Camera& camera,
+	    const KamataEngine::ObjectColor& outlineColor) const;
 
 	KamataEngine::Vector3 GetWorldPosition() const;
 	AABB GetAABB() const;
@@ -24,8 +28,11 @@ public:
 	    2.0f,
 	    2.0f,
 	};
+	static inline constexpr float kModelSourceHalfSize = 0.25f;
 
 private:
+	void UpdateTransforms();
 	KamataEngine::WorldTransform worldTransform_;
+	KamataEngine::WorldTransform outlineWorldTransform_;
 	KamataEngine::Model* model_ = nullptr;
 };

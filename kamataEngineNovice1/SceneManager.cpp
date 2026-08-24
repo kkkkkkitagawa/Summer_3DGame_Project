@@ -20,6 +20,7 @@ void SceneManager::Initialize() {
 	titleScene_.Initialize();
 	countdownScene_.Initialize();
 	gameOverScene_.Initialize();
+	fallenBlockCounter_.Initialize();
 
 	whiteTextureHandle_ = TextureManager::Load("white1x1.png");
 	EnsureDimCanvas();
@@ -125,6 +126,16 @@ void SceneManager::Update() {
 		}
 		break;
 	}
+
+	if (gameScene_) {
+		const std::optional<LevelDifficulty> difficultyRequest =
+		    gameScene_->ConsumeDifficultyChangeRequest();
+		if (difficultyRequest) {
+			ApplyDifficultyAndReturnToTitle(*difficultyRequest);
+		}
+		fallenBlockCounter_.SetValue(
+		    gameScene_->GetFallenMapBlockCount());
+	}
 }
 
 void SceneManager::Draw() {
@@ -149,6 +160,14 @@ void SceneManager::Draw() {
 		break;
 	}
 
+	const bool showFallenBlockCounter =
+	    state_ == State::Gameplay || state_ == State::GameOverFade ||
+	    state_ == State::GameOverDisplay || state_ == State::ReturnBlackFade ||
+	    (state_ == State::Countdown && gameplayStartedDuringCountdown_);
+	if (showFallenBlockCounter) {
+		fallenBlockCounter_.Draw(uiCamera_);
+	}
+
 	DrawCanvas(blackCanvas_, blackCanvasAlpha_);
 }
 
@@ -163,7 +182,7 @@ void SceneManager::TriggerGameOver() {
 }
 
 void SceneManager::ResetGameScene(bool obstacleGenerationEnabled) {
-	gameScene_ = std::make_unique<GameScene>();
+	gameScene_ = std::make_unique<GameScene>(selectedDifficulty_);
 	gameScene_->Initialize(obstacleGenerationEnabled);
 }
 
@@ -247,4 +266,21 @@ void SceneManager::BeginReturnToTitle() {
 	EnsureBlackCanvas();
 	blackCanvasAlpha_ = 0.0f;
 	state_ = State::ReturnBlackFade;
+}
+
+void SceneManager::ApplyDifficultyAndReturnToTitle(
+    LevelDifficulty difficulty) {
+	selectedDifficulty_ = difficulty;
+	transitionTime_ = 0.0f;
+	gameplayStartedDuringCountdown_ = false;
+
+	delete blackCanvas_;
+	blackCanvas_ = nullptr;
+	blackCanvasAlpha_ = 0.0f;
+	EnsureDimCanvas();
+	dimCanvasAlpha_ = kDimOpacity;
+
+	ResetGameScene(false);
+	titleScene_.Reset();
+	state_ = State::Title;
 }

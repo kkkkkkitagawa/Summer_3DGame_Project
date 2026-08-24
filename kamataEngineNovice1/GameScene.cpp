@@ -8,11 +8,41 @@
 #include <cstdio>
 #include <cstring>
 #include <numbers>
+#include <utility>
 
 using namespace KamataEngine;
 
 namespace {
 bool isDebugTextInitialized = false;
+
+struct DifficultyCommandDefinition {
+	const char* text;
+	LevelDifficulty difficulty;
+};
+
+constexpr std::array<DifficultyCommandDefinition, 3> kDifficultyCommands = {{
+	{"EASY", LevelDifficulty::Easy},
+	{"NORMAL", LevelDifficulty::Normal},
+	{"HARD", LevelDifficulty::Hard},
+}};
+
+char GetTriggeredAlphabeticKey(Input* input) {
+	constexpr std::array<std::pair<int, char>, 26> keyMap = {{
+	    {DIK_A, 'A'}, {DIK_B, 'B'}, {DIK_C, 'C'}, {DIK_D, 'D'},
+	    {DIK_E, 'E'}, {DIK_F, 'F'}, {DIK_G, 'G'}, {DIK_H, 'H'},
+	    {DIK_I, 'I'}, {DIK_J, 'J'}, {DIK_K, 'K'}, {DIK_L, 'L'},
+	    {DIK_M, 'M'}, {DIK_N, 'N'}, {DIK_O, 'O'}, {DIK_P, 'P'},
+	    {DIK_Q, 'Q'}, {DIK_R, 'R'}, {DIK_S, 'S'}, {DIK_T, 'T'},
+	    {DIK_U, 'U'}, {DIK_V, 'V'}, {DIK_W, 'W'}, {DIK_X, 'X'},
+	    {DIK_Y, 'Y'}, {DIK_Z, 'Z'},
+	}};
+	for (const auto& [key, character] : keyMap) {
+		if (input->TriggerKey(static_cast<BYTE>(key))) {
+			return character;
+		}
+	}
+	return '\0';
+}
 
 bool IsModifierKey(BYTE key) {
 	return key == DIK_LSHIFT || key == DIK_RSHIFT || key == DIK_LCONTROL ||
@@ -93,6 +123,9 @@ bool ProjectWorldToScreen(
 }
 } // namespace
 
+GameScene::GameScene(LevelDifficulty difficulty)
+    : levelGenerator_(difficulty) {}
+
 GameScene::~GameScene() {
 	mapBlocks_.clear();
 	detachedObstacles_.clear();
@@ -107,7 +140,21 @@ GameScene::~GameScene() {
 }
 
 void GameScene::Initialize(bool obstacleGenerationEnabled) {
-	mapMoveSpeed_ = kInitialMapMoveSpeed;
+	fallenMapBlockCount_ = 0;
+	switch (levelGenerator_.GetDifficulty()) {
+	case LevelDifficulty::Easy:
+		mapMoveSpeed_ =
+		    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier;
+		break;
+	case LevelDifficulty::Normal:
+		mapMoveSpeed_ =
+		    kInitialMapMoveSpeed * kNormalMapMoveSpeedMultiplier;
+		break;
+	case LevelDifficulty::Hard:
+		mapMoveSpeed_ =
+		    kInitialMapMoveSpeed * kHardMapMoveSpeedMultiplier;
+		break;
+	}
 	obstacleGenerationEnabled_ = obstacleGenerationEnabled;
 
 	modelSkydome_ = Model::CreateFromOBJ("SkyDome", true);
@@ -119,6 +166,8 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	assert(modelBlock_);
 	modelObstacle_ = Model::CreateFromOBJ("cube", true);
 	assert(modelObstacle_);
+	outlineColor_.Initialize();
+	outlineColor_.SetColor({0.0f, 0.0f, 0.0f, 1.0f});
 	InitializeMapBlocks();
 
 	modelPlayer_ = Model::CreateFromOBJ("playerTest", true);
@@ -130,7 +179,8 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	        Player::kCollisionHalfSize.y + kPlayerGroundClearance,
 	    sceneMap_.origin.z,
 	};
-	player_->Initialize(modelPlayer_, playerPosition);
+	player_->Initialize(
+	    modelPlayer_, playerPosition, kPlayerOutlineThickness);
 
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
@@ -190,7 +240,15 @@ void GameScene::Update(bool allowMapRotationInput) {
 		ResolvePlayerObstacleCollisions();
 	}
 	UpdateDebugCommand();
+	UpdateDifficultyCommand();
 	UpdateCamera();
+}
+
+std::optional<LevelDifficulty>
+GameScene::ConsumeDifficultyChangeRequest() {
+	const std::optional<LevelDifficulty> request = difficultyChangeRequest_;
+	difficultyChangeRequest_.reset();
+	return request;
 }
 
 void GameScene::InitializeMapBlocks() {
@@ -223,6 +281,12 @@ void GameScene::SpawnMapBlock(
 	block->modelWorldTransform.Initialize();
 	block->modelWorldTransform.scale_ = {
 	    kBlockModelScale, kBlockModelScale, kBlockModelScale};
+	block->outlineWorldTransform.Initialize();
+	block->outlineWorldTransform.scale_ = {
+	    kBlockModelScale + kMapOutlineThickness,
+	    kBlockModelScale + kMapOutlineThickness,
+	    kBlockModelScale + kMapOutlineThickness,
+	};
 	block->rotationX =
 	    static_cast<float>(mapRotationQuarterTurns_) *
 	    std::numbers::pi_v<float> * 0.5f;
@@ -235,6 +299,9 @@ void GameScene::SpawnMapBlock(
 	block->modelWorldTransform.rotation_ = block->worldTransform.rotation_;
 	block->modelWorldTransform.translation_ = block->worldTransform.translation_;
 	WorldTransformUpdate(block->modelWorldTransform);
+	block->outlineWorldTransform.rotation_ = block->worldTransform.rotation_;
+	block->outlineWorldTransform.translation_ = block->worldTransform.translation_;
+	WorldTransformUpdate(block->outlineWorldTransform);
 	for (const ObstacleSpawnPlan& obstaclePlan : spawnPlan.obstacles) {
 		AttachObstacle(
 		    *block, modelObstacle_, obstaclePlan.attachedFace,
@@ -271,7 +338,8 @@ void GameScene::AttachObstacle(
 	auto obstacle = std::make_unique<Obstacle>();
 	obstacle->Initialize(
 	    model, attachedFace, &block.worldTransform, kBlockSize * 0.5f, size,
-	    interactionRules, visualHeightScale, visualGrowthDuration);
+	    interactionRules, visualHeightScale, visualGrowthDuration,
+	    kObstacleOutlineThickness);
 	block.obstacles.push_back(std::move(obstacle));
 }
 
@@ -480,6 +548,10 @@ void GameScene::UpdateMapBlocks() {
 		block->modelWorldTransform.translation_ =
 		    block->worldTransform.translation_;
 		WorldTransformUpdate(block->modelWorldTransform);
+		block->outlineWorldTransform.rotation_ = block->worldTransform.rotation_;
+		block->outlineWorldTransform.translation_ =
+		    block->worldTransform.translation_;
+		WorldTransformUpdate(block->outlineWorldTransform);
 		const float safeMapMoveSpeed = (std::max)(mapMoveSpeed_, 0.001f);
 		const float timeUntilPlayerOrigin = (std::max)(
 		    0.0f,
@@ -528,6 +600,9 @@ void GameScene::UpdateMapBlocks() {
 	    mapBlocks_.end());
 
 	const std::size_t removedCount = oldCount - mapBlocks_.size();
+	if (obstacleGenerationEnabled_) {
+		fallenMapBlockCount_ += removedCount;
+	}
 	for (std::size_t index = 0; index < removedCount; ++index) {
 		float frontX = sceneMap_.origin.x - kBlockSize;
 		for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
@@ -606,6 +681,7 @@ void GameScene::UpdateDebugCommand() {
 		if (debugCommandIndex_ == command.size()) {
 			isDebugMode_ = !isDebugMode_;
 			debugCommandIndex_ = 0;
+			difficultyCommandInput_.clear();
 		}
 		return;
 	}
@@ -619,6 +695,53 @@ void GameScene::UpdateDebugCommand() {
 		debugCommandIndex_ = key == command.front() ? 1 : 0;
 		break;
 	}
+}
+
+void GameScene::UpdateDifficultyCommand() {
+	if (!isDebugMode_ || difficultyChangeRequest_) {
+		return;
+	}
+
+	Input* input = Input::GetInstance();
+	if (input->TriggerKey(DIK_BACK)) {
+		if (!difficultyCommandInput_.empty()) {
+			difficultyCommandInput_.pop_back();
+		}
+		return;
+	}
+
+	const char character = GetTriggeredAlphabeticKey(input);
+	if (character == '\0') {
+		return;
+	}
+
+	difficultyCommandInput_.push_back(character);
+	for (const DifficultyCommandDefinition& command : kDifficultyCommands) {
+		if (difficultyCommandInput_ == command.text) {
+			difficultyChangeRequest_ = command.difficulty;
+			return;
+		}
+	}
+
+	const auto isCommandPrefix = [this](const char* commandText) {
+		return std::strncmp(
+		           commandText, difficultyCommandInput_.c_str(),
+		           difficultyCommandInput_.size()) == 0;
+	};
+	for (const DifficultyCommandDefinition& command : kDifficultyCommands) {
+		if (isCommandPrefix(command.text)) {
+			return;
+		}
+	}
+
+	// Treat the latest key as a possible beginning of a new command.
+	difficultyCommandInput_.assign(1, character);
+	for (const DifficultyCommandDefinition& command : kDifficultyCommands) {
+		if (isCommandPrefix(command.text)) {
+			return;
+		}
+	}
+	difficultyCommandInput_.clear();
 }
 
 void GameScene::DrawDebugInfo() {
@@ -638,6 +761,7 @@ void GameScene::DrawDebugInfo() {
 	char levelSeedText[64] = {};
 	char levelDifficultyText[64] = {};
 	char mapMoveSpeedText[64] = {};
+	char fallenMapBlockCountText[64] = {};
 	std::snprintf(
 	    playerPositionText, sizeof(playerPositionText), "Player X: %.1f",
 	    player_->GetWorldPosition().x);
@@ -670,6 +794,9 @@ void GameScene::DrawDebugInfo() {
 	std::snprintf(
 	    mapMoveSpeedText, sizeof(mapMoveSpeedText),
 	    "Map Move Speed: %.2f", mapMoveSpeed_);
+	std::snprintf(
+	    fallenMapBlockCountText, sizeof(fallenMapBlockCountText),
+	    "Fallen Map Blocks: %zu", fallenMapBlockCount_);
 	char currentDifficultyText[64] = {};
 	std::snprintf(
 	    currentDifficultyText, sizeof(currentDifficultyText),
@@ -681,6 +808,7 @@ void GameScene::DrawDebugInfo() {
 	debugText->Print(levelSeedText, 10.0f, 90.0f, 1.0f);
 	debugText->Print(levelDifficultyText, 10.0f, 110.0f, 1.0f);
 	debugText->Print(mapMoveSpeedText, 10.0f, 130.0f, 1.0f);
+	debugText->Print(fallenMapBlockCountText, 10.0f, 150.0f, 1.0f);
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	constexpr float difficultyTextScale = 1.0f;
 	const float difficultyTextWidth =
@@ -700,6 +828,16 @@ void GameScene::DrawDebugInfo() {
 	    static_cast<float>(dxCommon->GetBackBufferHeight()) -
 	    static_cast<float>(DebugText::kFontHeight) - 10.0f;
 	debugText->Print("Herta", hertaX, hertaY, 1.0f);
+	constexpr const char* difficultyCodesText = "Easy   Normal   Hard";
+	debugText->Print(difficultyCodesText, 10.0f, hertaY, 1.0f);
+	char difficultyInputText[64] = {};
+	std::snprintf(
+	    difficultyInputText, sizeof(difficultyInputText), "Input: %s",
+	    difficultyCommandInput_.c_str());
+	debugText->Print(
+	    difficultyInputText, 10.0f,
+	    hertaY - static_cast<float>(DebugText::kFontHeight) - 4.0f,
+	    1.0f);
 	Sprite::PreDraw();
 	debugText->DrawAll();
 	Sprite::PostDraw();
@@ -842,22 +980,63 @@ void GameScene::Draw() {
 }
 
 void GameScene::DrawMapBlocks() {
+	const Camera& camera = GetActiveCamera();
+
+	// One-pixel inverted hull for each map block.
+	Model::PreDraw(
+	    Model::CullingMode::kFront, Model::BlendMode::kNone,
+	    Model::DepthTestMode::kOn);
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		modelBlock_->Draw(
+		    block->outlineWorldTransform, camera, &outlineColor_);
+	}
+	Model::PostDraw();
+
+	// Draw the map first so its depth hides the part of the expanded outline
+	// shell that is inside the block surface.
 	Model::PreDraw();
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
-		modelBlock_->Draw(block->modelWorldTransform, GetActiveCamera());
+		modelBlock_->Draw(block->modelWorldTransform, camera);
+	}
+	Model::PostDraw();
+
+	// Inverted-hull outline: render only the back faces of a slightly expanded
+	// black copy, then place the regular obstacle over it.
+	Model::PreDraw(
+	    Model::CullingMode::kFront, Model::BlendMode::kNone,
+	    Model::DepthTestMode::kOn);
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
-			obstacle->Draw(GetActiveCamera());
+			obstacle->DrawOutline(camera, outlineColor_);
 		}
 	}
 	for (const std::unique_ptr<Obstacle>& obstacle : detachedObstacles_) {
-		obstacle->Draw(GetActiveCamera());
+		obstacle->DrawOutline(camera, outlineColor_);
+	}
+	Model::PostDraw();
+
+	Model::PreDraw();
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
+			obstacle->Draw(camera);
+		}
+	}
+	for (const std::unique_ptr<Obstacle>& obstacle : detachedObstacles_) {
+		obstacle->Draw(camera);
 	}
 	Model::PostDraw();
 }
 
 void GameScene::DrawPlayer() {
+	const Camera& camera = GetActiveCamera();
+	Model::PreDraw(
+	    Model::CullingMode::kFront, Model::BlendMode::kNone,
+	    Model::DepthTestMode::kOn);
+	player_->DrawOutline(camera, outlineColor_);
+	Model::PostDraw();
+
 	Model::PreDraw();
-	player_->Draw(GetActiveCamera());
+	player_->Draw(camera);
 	Model::PostDraw();
 }
 
