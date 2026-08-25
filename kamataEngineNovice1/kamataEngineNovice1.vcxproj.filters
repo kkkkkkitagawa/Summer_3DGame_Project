@@ -16,6 +16,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+	<ClCompile Include="DeathHazardLine.cpp" />
+	<ClCompile Include="DifficultySelectScene.cpp" />
 	<ClCompile Include="FallenBlockCounter.cpp" />
 	<ClCompile Include="GameClearScene.cpp" />
     <ClCompile Include="GameScene.cpp" />
@@ -31,6 +33,8 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+	<ClInclude Include="DeathHazardLine.h" />
+	<ClInclude Include="DifficultySelectScene.h" />
 	<ClInclude Include="FallenBlockCounter.h" />
 	<ClInclude Include="GameClearScene.h" />
     <ClInclude Include="GameData.h" />

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CountdownScene.h"
+#include "DifficultySelectScene.h"
 #include "FallenBlockCounter.h"
 #include "GameOverScene.h"
 #include "GameClearScene.h"
@@ -27,6 +28,9 @@ private:
 	enum class State {
 		Title,
 		TitleExit,
+		DifficultySelect,
+		DifficultySelectBlackFade,
+		CountdownReveal,
 		Countdown,
 		Gameplay,
 		GameClearDisplay,
@@ -49,10 +53,12 @@ private:
 	void DrawWhiteCanvas(float alpha) const;
 	void BeginReturnToTitle();
 	void ApplyDifficultyAndReturnToTitle(LevelDifficulty difficulty);
+	void UnlockNextDifficultyAfterClear();
 
 	std::unique_ptr<GameScene> gameScene_;
 	TitleScene titleScene_;
 	CountdownScene countdownScene_;
+	DifficultySelectScene difficultySelectScene_;
 	GameOverScene gameOverScene_;
 	GameClearScene gameClearScene_;
 	FallenBlockCounter fallenBlockCounter_;
@@ -69,12 +75,15 @@ private:
 	float whiteCanvasAlpha_ = 0.0f;
 	bool gameplayStartedDuringCountdown_ = false;
 	LevelDifficulty selectedDifficulty_ = LevelDifficulty::Easy;
+	LevelDifficulty maximumUnlockedDifficulty_ = LevelDifficulty::Easy;
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;
 	static inline constexpr float kDimOpacity = 1.0f;
 	static inline constexpr float kDimTopAlpha = 1.0f;
 	static inline constexpr float kDimBottomAlpha = 0.3f;
 	static inline constexpr float kGameOverFadeDuration = 0.75f;
+	static inline constexpr float kDifficultyBlackFadeDuration = 0.40f;
+	static inline constexpr float kCountdownRevealDuration = 0.35f;
 	static inline constexpr float kReturnBlackFadeDuration = 0.75f;
 	static inline constexpr float kReturnRevealDuration = 0.75f;
 	static inline constexpr float kClearWhiteFadeDuration = 0.35f;

@@ -147,6 +147,8 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	fallenMapBlockCount_ = 0;
 	victoryTarget_ = SelectVictoryTarget();
 	clearSequenceState_ = ClearSequenceState::Playing;
+	deathSequenceState_ = DeathSequenceState::Inactive;
+	deathSequenceTime_ = 0.0f;
 	goalBlock_ = nullptr;
 	switch (levelGenerator_.GetDifficulty()) {
 	case LevelDifficulty::Easy:
@@ -198,6 +200,12 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	};
 	player_->Initialize(
 	    modelPlayer_, playerPosition, kPlayerOutlineThickness);
+	deathHazardLine_.Initialize({
+	    -2.5f,
+	    sceneMap_.groundHeight + kBlockSize * 0.5f +
+	        3.0f / kPixelsPerWorldUnit,
+	    sceneMap_.origin.z,
+	});
 
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
@@ -246,6 +254,11 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 }
 
 void GameScene::Update(bool allowMapRotationInput) {
+	if (deathSequenceState_ != DeathSequenceState::Inactive) {
+		UpdateDeathSequence();
+		return;
+	}
+
 	skydome_->Update();
 	switch (clearSequenceState_) {
 	case ClearSequenceState::Playing:
@@ -280,8 +293,14 @@ void GameScene::Update(bool allowMapRotationInput) {
 	     clearSequenceState_ == ClearSequenceState::RunwayApproach)) {
 		ResolvePlayerObstacleCollisions();
 	}
+	deathHazardLine_.Update(player_->GetWorldPosition().x);
 	UpdateDebugCommand();
 	UpdateDifficultyCommand();
+	if (!isDebugMode_ &&
+	    clearSequenceState_ == ClearSequenceState::Playing &&
+	    player_->GetWorldPosition().x <= kDeathTriggerX) {
+		BeginDeathSequence();
+	}
 	UpdateCamera();
 }
 
@@ -497,6 +516,57 @@ void GameScene::UpdateClearSequence() {
 	if (clearSequenceState_ == ClearSequenceState::PlayerLaunch &&
 	    player_->IsClearLaunchFinished()) {
 		clearSequenceState_ = ClearSequenceState::Ready;
+	}
+}
+
+void GameScene::BeginDeathSequence() {
+	if (deathSequenceState_ != DeathSequenceState::Inactive ||
+	    isDebugMode_ ||
+	    clearSequenceState_ != ClearSequenceState::Playing) {
+		return;
+	}
+
+	deathCameraStartPosition_ = playerCamera_.translation_;
+	deathCameraStartRotation_ = playerCamera_.rotation_;
+	deathSequenceTime_ = 0.0f;
+	deathSequenceState_ = DeathSequenceState::CameraMove;
+}
+
+void GameScene::UpdateDeathSequence() {
+	if (deathSequenceState_ == DeathSequenceState::CameraMove) {
+		deathSequenceTime_ = (std::min)(
+		    deathSequenceTime_ + kDeltaTime, kDeathCameraMoveDuration);
+		const float progress = std::clamp(
+		    deathSequenceTime_ / kDeathCameraMoveDuration, 0.0f, 1.0f);
+		const float smoothProgress =
+		    progress * progress * (3.0f - 2.0f * progress);
+		auto lerp = [smoothProgress](float start, float end) {
+			return start + (end - start) * smoothProgress;
+		};
+		playerCamera_.translation_ = {
+		    lerp(deathCameraStartPosition_.x, kDeathCameraPosition.x),
+		    lerp(deathCameraStartPosition_.y, kDeathCameraPosition.y),
+		    lerp(deathCameraStartPosition_.z, kDeathCameraPosition.z),
+		};
+		playerCamera_.rotation_ = {
+		    lerp(deathCameraStartRotation_.x, kDeathCameraRotation.x),
+		    lerp(deathCameraStartRotation_.y, kDeathCameraRotation.y),
+		    lerp(deathCameraStartRotation_.z, kDeathCameraRotation.z),
+		};
+		playerCamera_.UpdateMatrix();
+
+		if (progress >= 1.0f) {
+			player_->StartDeathFall();
+			deathSequenceState_ = DeathSequenceState::PlayerFall;
+		}
+		return;
+	}
+
+	if (deathSequenceState_ == DeathSequenceState::PlayerFall) {
+		player_->UpdateDeathFall(kDeltaTime);
+		if (player_->IsDeathFallFinished()) {
+			deathSequenceState_ = DeathSequenceState::Ready;
+		}
 	}
 }
 
@@ -1236,6 +1306,7 @@ void GameScene::Draw() {
 
 	DrawMapGrid();
 	DrawMapBlocks();
+	deathHazardLine_.Draw(GetActiveCamera());
 	DrawPlayer();
 
 	if (isDebugMode_) {
@@ -1523,5 +1594,8 @@ void GameScene::DrawMouseCircle() {
 }
 
 const Camera& GameScene::GetActiveCamera() const {
+	if (deathSequenceState_ != DeathSequenceState::Inactive) {
+		return playerCamera_;
+	}
 	return isDebugMode_ ? debugCamera_ : playerCamera_;
 }

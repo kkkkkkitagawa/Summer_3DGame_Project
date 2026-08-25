@@ -70,13 +70,14 @@ void LevelGenerator::Reset() {
 		Reset(kSavedEasySeed);
 		return;
 	}
+	if (difficulty_ == LevelDifficulty::Normal) {
+		Reset(kSavedNormalSeed);
+		return;
+	}
 	if (difficulty_ == LevelDifficulty::Hard) {
 		Reset(kSavedHardSeed);
 		return;
 	}
-
-	std::random_device randomDevice;
-	Reset(randomDevice());
 }
 
 void LevelGenerator::Reset(uint32_t seed) {

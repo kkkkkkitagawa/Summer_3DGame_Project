@@ -67,6 +67,8 @@ private:
 	static inline constexpr int kMaximumEndingClearStreak = 7;
 	// 実機テストで採用した簡単難度の固定シード。
 	static inline constexpr uint32_t kSavedEasySeed = 3747538539u;
+	// 実機テストで採用した普通難度の固定シード。
+	static inline constexpr uint32_t kSavedNormalSeed = 2844454480u;
 	// 実機テストで採用した困難難度の固定シード。
 	static inline constexpr uint32_t kSavedHardSeed = 3606607211u;
 	using PatternDefinition = std::array<FaceMask, kPatternLength>;

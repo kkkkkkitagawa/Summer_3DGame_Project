@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeathHazardLine.h"
 #include "GameData.h"
 #include "GoalStair.h"
 #include "LevelGenerator.h"
@@ -36,6 +37,9 @@ public:
 	bool IsClearSequenceActive() const {
 		return clearSequenceState_ != ClearSequenceState::Playing;
 	}
+	bool IsDeathSequenceReady() const {
+		return deathSequenceState_ == DeathSequenceState::Ready;
+	}
 	std::optional<LevelDifficulty> ConsumeDifficultyChangeRequest();
 
 private:
@@ -44,6 +48,12 @@ private:
 		RunwayApproach,
 		PlayerRun,
 		PlayerLaunch,
+		Ready,
+	};
+	enum class DeathSequenceState {
+		Inactive,
+		CameraMove,
+		PlayerFall,
 		Ready,
 	};
 
@@ -84,6 +94,8 @@ private:
 	void AttachGoalStairs(MapBlock& block);
 	void BeginClearSequence();
 	void UpdateClearSequence();
+	void BeginDeathSequence();
+	void UpdateDeathSequence();
 	std::size_t SelectVictoryTarget() const;
 	KamataEngine::Matrix4x4 CreateMapBlockLogicalTransform(
 	    const MapBlock& block, float rotationX) const;
@@ -128,6 +140,7 @@ private:
 	std::vector<std::unique_ptr<SlimeObstacle>> detachedSlimeObstacles_;
 	// SceneManagerで選択された難度の生成規則と採用済みシードを使用する。
 	LevelGenerator levelGenerator_;
+	DeathHazardLine deathHazardLine_;
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
@@ -150,6 +163,10 @@ private:
 	int blockedRotationFeedbackDirection_ = 0;
 	float mapMoveSpeed_ = 0.0f;
 	ClearSequenceState clearSequenceState_ = ClearSequenceState::Playing;
+	DeathSequenceState deathSequenceState_ = DeathSequenceState::Inactive;
+	float deathSequenceTime_ = 0.0f;
+	KamataEngine::Vector3 deathCameraStartPosition_ = {};
+	KamataEngine::Vector3 deathCameraStartRotation_ = {};
 	MapBlock* goalBlock_ = nullptr;
 	bool obstacleGenerationEnabled_ = true;
 	std::mt19937 obstacleVisualRandomEngine_;
@@ -235,12 +252,24 @@ private:
 	static inline const float kMapOutlineThicknessPixels = 1.0f;
 	static inline const float kMapOutlineThickness =
 	    kMapOutlineThicknessPixels / kPixelsPerWorldUnit;
-	static inline constexpr std::size_t kClearRunwayBlockCount = 20;
+	static inline constexpr std::size_t kClearRunwayBlockCount = 8;
 	static inline constexpr float kGoalStopDistance = 7.0f;
 	static inline constexpr float kClearObstacleRetractionDuration = 0.4f;
 	static inline constexpr float kGoalPlayerRunSpeed = 2.0f;
 	static inline constexpr float kGoalStairOutlineThickness =
 	    1.0f / kPixelsPerWorldUnit;
+	static inline constexpr float kDeathTriggerX = -2.8f;
+	static inline constexpr float kDeathCameraMoveDuration = 0.65f;
+	static inline const KamataEngine::Vector3 kDeathCameraPosition = {
+	    -2.878f,
+	    5.666f,
+	    -6.466f,
+	};
+	static inline const KamataEngine::Vector3 kDeathCameraRotation = {
+	    35.81f * std::numbers::pi_v<float> / 180.0f,
+	    7.73f * std::numbers::pi_v<float> / 180.0f,
+	    0.0f,
+	};
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;

@@ -19,6 +19,7 @@ void SceneManager::Initialize() {
 	uiCamera_.UpdateMatrix();
 
 	titleScene_.Initialize();
+	difficultySelectScene_.Initialize();
 	countdownScene_.Initialize();
 	gameOverScene_.Initialize();
 	gameClearScene_.Initialize();
@@ -50,8 +51,57 @@ void SceneManager::Update() {
 		gameScene_->Update(false);
 		titleScene_.Update();
 		if (titleScene_.IsExitFinished()) {
+			difficultySelectScene_.Reset(maximumUnlockedDifficulty_);
+			state_ = State::DifficultySelect;
+		}
+		break;
+	case State::DifficultySelect:
+		gameScene_->Update(false);
+		difficultySelectScene_.Update();
+		if (difficultySelectScene_.IsReadyForInput()) {
+			if (input->TriggerKey(DIK_A)) {
+				difficultySelectScene_.SelectPrevious();
+			}
+			if (input->TriggerKey(DIK_D)) {
+				difficultySelectScene_.SelectNext();
+			}
+			if (input->TriggerKey(DIK_SPACE)) {
+				difficultySelectScene_.Confirm();
+			}
+		}
+		if (difficultySelectScene_.IsConfirmationFinished()) {
+			selectedDifficulty_ =
+			    difficultySelectScene_.GetSelectedDifficulty();
+			transitionTime_ = 0.0f;
+			EnsureBlackCanvas();
+			blackCanvasAlpha_ = 0.0f;
+			state_ = State::DifficultySelectBlackFade;
+		}
+		break;
+	case State::DifficultySelectBlackFade:
+		gameScene_->Update(false);
+		difficultySelectScene_.Update();
+		transitionTime_ += kDeltaTime;
+		blackCanvasAlpha_ = std::clamp(
+		    transitionTime_ / kDifficultyBlackFadeDuration, 0.0f, 1.0f);
+		if (transitionTime_ >= kDifficultyBlackFadeDuration) {
+			blackCanvasAlpha_ = 1.0f;
+			ResetGameScene(false);
 			countdownScene_.Reset();
 			gameplayStartedDuringCountdown_ = false;
+			transitionTime_ = 0.0f;
+			state_ = State::CountdownReveal;
+		}
+		break;
+	case State::CountdownReveal:
+		gameScene_->Update(false);
+		transitionTime_ += kDeltaTime;
+		blackCanvasAlpha_ = 1.0f - std::clamp(
+		    transitionTime_ / kCountdownRevealDuration, 0.0f, 1.0f);
+		if (transitionTime_ >= kCountdownRevealDuration) {
+			blackCanvasAlpha_ = 0.0f;
+			delete blackCanvas_;
+			blackCanvas_ = nullptr;
 			state_ = State::Countdown;
 		}
 		break;
@@ -80,15 +130,14 @@ void SceneManager::Update() {
 	case State::Gameplay:
 		gameScene_->Update(true);
 		if (gameScene_->IsGameClearReady()) {
+			UnlockNextDifficultyAfterClear();
 			gameClearScene_.Start();
 			EnsureWhiteCanvas();
 			whiteCanvasAlpha_ = 0.0f;
 			state_ = State::GameClearDisplay;
 			break;
 		}
-		// 仮の死亡入口。正式な死亡処理を追加した後はTriggerGameOverを呼ぶ。
-		if (!gameScene_->IsClearSequenceActive() &&
-		    gameScene_->IsDebugMode() && input->TriggerKey(DIK_SPACE)) {
+		if (gameScene_->IsDeathSequenceReady()) {
 			TriggerGameOver();
 		}
 		break;
@@ -197,6 +246,11 @@ void SceneManager::Draw() {
 	case State::ClearReturnReveal:
 		titleScene_.Draw(uiCamera_);
 		break;
+	case State::DifficultySelect:
+	case State::DifficultySelectBlackFade:
+		difficultySelectScene_.Draw(uiCamera_);
+		break;
+	case State::CountdownReveal:
 	case State::Countdown:
 		countdownScene_.Draw(uiCamera_);
 		break;
@@ -370,4 +424,16 @@ void SceneManager::ApplyDifficultyAndReturnToTitle(
 	ResetGameScene(false);
 	titleScene_.Reset();
 	state_ = State::Title;
+}
+
+void SceneManager::UnlockNextDifficultyAfterClear() {
+	if (selectedDifficulty_ == LevelDifficulty::Easy &&
+	    maximumUnlockedDifficulty_ == LevelDifficulty::Easy) {
+		maximumUnlockedDifficulty_ = LevelDifficulty::Normal;
+		return;
+	}
+	if (selectedDifficulty_ == LevelDifficulty::Normal &&
+	    maximumUnlockedDifficulty_ == LevelDifficulty::Normal) {
+		maximumUnlockedDifficulty_ = LevelDifficulty::Hard;
+	}
 }

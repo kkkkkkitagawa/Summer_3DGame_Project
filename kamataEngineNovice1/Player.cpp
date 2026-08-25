@@ -124,6 +124,39 @@ void Player::UpdateClearLaunch(float deltaTime) {
 	}
 }
 
+void Player::StartDeathFall() {
+	deathFallElapsed_ = 0.0f;
+	deathVisualOffsetX_ = 0.0f;
+	deathVisualOffsetY_ = 0.0f;
+	clearVisualOffsetX_ = 0.0f;
+	jumpVisualOffsetY_ = 0.0f;
+	animationScale_ = {1.0f, 1.0f, 1.0f};
+	isKnockbackActive_ = false;
+	isTurnJumpActive_ = false;
+	isDeathFallFinished_ = false;
+	isVisible_ = true;
+	UpdateTransforms();
+}
+
+void Player::UpdateDeathFall(float deltaTime) {
+	if (isDeathFallFinished_) {
+		return;
+	}
+
+	deathFallElapsed_ =
+	    (std::min)(deathFallElapsed_ + deltaTime, kDeathFallDuration);
+	deathVisualOffsetX_ = -kDeathBackwardSpeed * deathFallElapsed_;
+	deathVisualOffsetY_ =
+	    kDeathInitialUpwardSpeed * deathFallElapsed_ -
+	    0.5f * kDeathGravity * deathFallElapsed_ * deathFallElapsed_;
+	rollingRotationZ_ += kDeathSpinSpeed * deltaTime;
+	UpdateTransforms();
+
+	if (deathFallElapsed_ >= kDeathFallDuration) {
+		isDeathFallFinished_ = true;
+	}
+}
+
 void Player::Draw(const KamataEngine::Camera& camera) const {
 	if (!isVisible_) {
 		return;
@@ -243,8 +276,10 @@ void Player::UpdateTransforms() {
 	};
 	worldTransform_.rotation_.z = rollingRotationZ_;
 	worldTransform_.translation_ = logicalPosition_;
-	worldTransform_.translation_.x += clearVisualOffsetX_;
-	worldTransform_.translation_.y += jumpVisualOffsetY_;
+	worldTransform_.translation_.x +=
+	    clearVisualOffsetX_ + deathVisualOffsetX_;
+	worldTransform_.translation_.y +=
+	    jumpVisualOffsetY_ + deathVisualOffsetY_;
 	outlineWorldTransform_.scale_ = {
 	    worldTransform_.scale_.x + outlineScaleExpansion_,
 	    worldTransform_.scale_.y + outlineScaleExpansion_,
