@@ -264,7 +264,8 @@ void GameScene::Update(bool allowMapRotationInput) {
 	case ClearSequenceState::Playing:
 	case ClearSequenceState::RunwayApproach:
 		player_->Update(
-		    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier,
+		    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier *
+		        kPlayerForwardSpeedMultiplier,
 		    sceneMap_.origin.x, kDeltaTime);
 		break;
 	case ClearSequenceState::PlayerRun:

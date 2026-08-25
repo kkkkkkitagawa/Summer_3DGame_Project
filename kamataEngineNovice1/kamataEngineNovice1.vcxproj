@@ -94,8 +94,8 @@
       <AdditionalDependencies>KamataEngine.lib;DirectXTex.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)..\Resources" .\Resources /S /E /I /D /R /Y
-xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y</Command>
+      <Command>xcopy "$(ProjectDir)..\Resources" "$(ProjectDir)Resources" /S /E /I /R /Y
+xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -126,8 +126,8 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
       <AdditionalLibraryDirectories>C:\KamataEngine\External\KamataEngine\lib\$(Configuration);C:\KamataEngine\External\DirectXTex\lib\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)..\Resources" .\Resources /S /E /I /D /R /Y
-xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y</Command>
+      <Command>xcopy "$(ProjectDir)..\Resources" "$(ProjectDir)Resources" /S /E /I /R /Y
+xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -160,8 +160,8 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
       <LinkTimeCodeGeneration />
     </Link>
     <PostBuildEvent>
-      <Command>xcopy "$(ProjectDir)..\Resources" .\Resources /S /E /I /D /R /Y
-xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y</Command>
+      <Command>xcopy "$(ProjectDir)..\Resources" "$(ProjectDir)Resources" /S /E /I /R /Y
+xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</Command>
     </PostBuildEvent>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -169,6 +169,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp" />
+	<ClCompile Include="AmbientParticleSystem.cpp" />
 	<ClCompile Include="CountdownScene.cpp" />
 	<ClCompile Include="DeathHazardLine.cpp" />
 	<ClCompile Include="DifficultySelectScene.cpp" />
@@ -185,9 +186,11 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
 	<ClCompile Include="SlimeObstacle.cpp" />
 	<ClCompile Include="SceneManager.cpp" />
 	<ClCompile Include="TitleScene.cpp" />
+	<ClCompile Include="TitleControlGuide.cpp" />
     <ClCompile Include="WorldTransformUpdate.cpp" />
   </ItemGroup>
   <ItemGroup>
+	<ClInclude Include="AmbientParticleSystem.h" />
 	<ClInclude Include="CountdownScene.h" />
 	<ClInclude Include="DeathHazardLine.h" />
 	<ClInclude Include="DifficultySelectScene.h" />
@@ -205,6 +208,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /D /R /Y
 	<ClInclude Include="SlimeObstacle.h" />
 	<ClInclude Include="SceneManager.h" />
 	<ClInclude Include="TitleScene.h" />
+	<ClInclude Include="TitleControlGuide.h" />
     <ClInclude Include="WorldTransformUpdate.h" />
     <ClInclude Include="..\DirectXGame\3d\Camera.h" />
     <ClInclude Include="C:\KamataEngine\DirectXGame\base\StringUtility.h" />

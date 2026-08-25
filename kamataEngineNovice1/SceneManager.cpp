@@ -19,6 +19,7 @@ void SceneManager::Initialize() {
 	uiCamera_.UpdateMatrix();
 
 	titleScene_.Initialize();
+	titleControlGuide_.Initialize();
 	difficultySelectScene_.Initialize();
 	countdownScene_.Initialize();
 	gameOverScene_.Initialize();
@@ -29,7 +30,9 @@ void SceneManager::Initialize() {
 	EnsureDimCanvas();
 
 	ResetGameScene(false);
+	ambientParticleSystem_.Initialize();
 	titleScene_.Reset();
+	titleControlGuide_.Reset();
 	state_ = State::Title;
 	dimCanvasAlpha_ = kDimOpacity;
 	blackCanvasAlpha_ = 0.0f;
@@ -42,21 +45,31 @@ void SceneManager::Update() {
 	case State::Title:
 		gameScene_->Update(false);
 		titleScene_.Update();
+		titleControlGuide_.Update();
 		if (input->TriggerKey(DIK_SPACE)) {
 			titleScene_.StartExit();
+			titleControlGuide_.StartExit();
 			state_ = State::TitleExit;
 		}
 		break;
 	case State::TitleExit:
 		gameScene_->Update(false);
 		titleScene_.Update();
+		titleControlGuide_.Update();
 		if (titleScene_.IsExitFinished()) {
-			difficultySelectScene_.Reset(maximumUnlockedDifficulty_);
+			difficultySelectScene_.Reset(
+			    gameScene_->IsDebugMode()
+			        ? LevelDifficulty::Hard
+			        : maximumUnlockedDifficulty_);
 			state_ = State::DifficultySelect;
 		}
 		break;
 	case State::DifficultySelect:
 		gameScene_->Update(false);
+		difficultySelectScene_.SetMaximumUnlockedDifficulty(
+		    gameScene_->IsDebugMode()
+		        ? LevelDifficulty::Hard
+		        : maximumUnlockedDifficulty_);
 		difficultySelectScene_.Update();
 		if (difficultySelectScene_.IsReadyForInput()) {
 			if (input->TriggerKey(DIK_A)) {
@@ -159,6 +172,7 @@ void SceneManager::Update() {
 			whiteCanvasAlpha_ = 1.0f;
 			ResetGameScene(false);
 			titleScene_.Reset();
+			titleControlGuide_.Reset();
 			EnsureDimCanvas();
 			dimCanvasAlpha_ = kDimOpacity;
 			transitionTime_ = 0.0f;
@@ -168,6 +182,7 @@ void SceneManager::Update() {
 	case State::ClearReturnReveal:
 		gameScene_->Update(false);
 		titleScene_.Update();
+		titleControlGuide_.Update();
 		transitionTime_ += kDeltaTime;
 		whiteCanvasAlpha_ = 1.0f - std::clamp(
 		    transitionTime_ / kClearReturnRevealDuration, 0.0f, 1.0f);
@@ -204,6 +219,7 @@ void SceneManager::Update() {
 			blackCanvasAlpha_ = 1.0f;
 			ResetGameScene(false);
 			titleScene_.Reset();
+			titleControlGuide_.Reset();
 			dimCanvasAlpha_ = kDimOpacity;
 			transitionTime_ = 0.0f;
 			state_ = State::ReturnTitleReveal;
@@ -212,6 +228,7 @@ void SceneManager::Update() {
 	case State::ReturnTitleReveal:
 		gameScene_->Update(false);
 		titleScene_.Update();
+		titleControlGuide_.Update();
 		transitionTime_ += kDeltaTime;
 		blackCanvasAlpha_ = 1.0f - std::clamp(
 		    transitionTime_ / kReturnRevealDuration, 0.0f, 1.0f);
@@ -225,6 +242,7 @@ void SceneManager::Update() {
 	}
 
 	if (gameScene_) {
+		ambientParticleSystem_.Update(gameScene_->GetRenderCamera());
 		const std::optional<LevelDifficulty> difficultyRequest =
 		    gameScene_->ConsumeDifficultyChangeRequest();
 		if (difficultyRequest) {
@@ -237,6 +255,7 @@ void SceneManager::Update() {
 
 void SceneManager::Draw() {
 	gameScene_->Draw();
+	ambientParticleSystem_.Draw(gameScene_->GetRenderCamera());
 	DrawDimCanvas(dimCanvasAlpha_);
 
 	switch (state_) {
@@ -245,6 +264,7 @@ void SceneManager::Draw() {
 	case State::ReturnTitleReveal:
 	case State::ClearReturnReveal:
 		titleScene_.Draw(uiCamera_);
+		titleControlGuide_.Draw(uiCamera_);
 		break;
 	case State::DifficultySelect:
 	case State::DifficultySelectBlackFade:
@@ -423,6 +443,7 @@ void SceneManager::ApplyDifficultyAndReturnToTitle(
 
 	ResetGameScene(false);
 	titleScene_.Reset();
+	titleControlGuide_.Reset();
 	state_ = State::Title;
 }
 

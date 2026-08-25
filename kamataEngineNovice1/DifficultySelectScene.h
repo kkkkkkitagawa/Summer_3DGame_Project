@@ -12,6 +12,8 @@ public:
 
 	void Initialize();
 	void Reset(LevelDifficulty maximumUnlockedDifficulty);
+	void SetMaximumUnlockedDifficulty(
+	    LevelDifficulty maximumUnlockedDifficulty);
 	void SelectPrevious();
 	void SelectNext();
 	void Confirm();
@@ -38,7 +40,9 @@ private:
 	std::array<KamataEngine::Model*, 3> models_ = {};
 	std::array<uint32_t, 3> textureHandles_ = {};
 	std::array<KamataEngine::WorldTransform, 3> worldTransforms_ = {};
+	std::array<KamataEngine::WorldTransform, 3> outlineWorldTransforms_ = {};
 	std::array<KamataEngine::ObjectColor, 3> colors_ = {};
+	KamataEngine::ObjectColor outlineColor_;
 	std::array<float, 3> currentScaleRatios_ = {};
 	std::size_t selectedIndex_ = 0;
 	std::size_t maximumUnlockedIndex_ = 0;
@@ -59,6 +63,7 @@ private:
 	static inline constexpr float kScaleTransitionSpeed = 10.0f;
 	static inline constexpr float kLockedBrightness = 0.32f;
 	static inline constexpr float kLockedOpacity = 0.65f;
+	static inline constexpr float kOutlineExpansion = 0.025f;
 	static inline constexpr std::array<float, 3> kPositionX = {
 	    -3.4f,
 	    0.0f,

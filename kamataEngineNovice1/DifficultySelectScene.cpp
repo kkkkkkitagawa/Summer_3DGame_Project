@@ -40,8 +40,13 @@ void DifficultySelectScene::Initialize() {
 		worldTransforms_[index].Initialize();
 		worldTransforms_[index].rotation_.x =
 		    std::numbers::pi_v<float> * 0.5f;
+		outlineWorldTransforms_[index].Initialize();
+		outlineWorldTransforms_[index].rotation_.x =
+		    std::numbers::pi_v<float> * 0.5f;
 		colors_[index].Initialize();
 	}
+	outlineColor_.Initialize();
+	outlineColor_.SetColor({0.0f, 0.0f, 0.0f, 1.0f});
 	Reset(LevelDifficulty::Easy);
 }
 
@@ -56,6 +61,12 @@ void DifficultySelectScene::Reset(
 		currentScaleRatios_[index] = GetTargetScaleRatio(index);
 	}
 	UpdateTransforms(positionY_);
+}
+
+void DifficultySelectScene::SetMaximumUnlockedDifficulty(
+    LevelDifficulty maximumUnlockedDifficulty) {
+	maximumUnlockedIndex_ = ToIndex(maximumUnlockedDifficulty);
+	selectedIndex_ = (std::min)(selectedIndex_, maximumUnlockedIndex_);
 }
 
 void DifficultySelectScene::SelectPrevious() {
@@ -128,6 +139,15 @@ void DifficultySelectScene::Update() {
 }
 
 void DifficultySelectScene::Draw(const Camera& camera) const {
+	// 选中项单独使用反转外壳描边，未选中项不描边。
+	Model::PreDraw(
+	    Model::CullingMode::kFront, Model::BlendMode::kNormal,
+	    Model::DepthTestMode::kOff);
+	models_[selectedIndex_]->Draw(
+	    outlineWorldTransforms_[selectedIndex_], camera,
+	    &outlineColor_);
+	Model::PostDraw();
+
 	Model::PreDraw(
 	    Model::CullingMode::kNone, Model::BlendMode::kNormal,
 	    Model::DepthTestMode::kOff);
@@ -151,6 +171,14 @@ void DifficultySelectScene::UpdateTransforms(float positionY) {
 		transform.scale_ = {-scale, scale, scale};
 		transform.translation_ = {kPositionX[index], positionY, 0.0f};
 		WorldTransformUpdate(transform);
+		WorldTransform& outlineTransform = outlineWorldTransforms_[index];
+		outlineTransform.scale_ = {
+		    -(scale + kOutlineExpansion),
+		    scale + kOutlineExpansion,
+		    scale + kOutlineExpansion,
+		};
+		outlineTransform.translation_ = transform.translation_;
+		WorldTransformUpdate(outlineTransform);
 
 		if (index <= maximumUnlockedIndex_) {
 			colors_[index].SetColor({1.0f, 1.0f, 1.0f, 1.0f});

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AmbientParticleSystem.h"
 #include "CountdownScene.h"
 #include "DifficultySelectScene.h"
 #include "FallenBlockCounter.h"
@@ -8,6 +9,7 @@
 #include "GameScene.h"
 #include "KamataEngine.h"
 #include "TitleScene.h"
+#include "TitleControlGuide.h"
 
 #include <array>
 #include <cstddef>
@@ -57,11 +59,13 @@ private:
 
 	std::unique_ptr<GameScene> gameScene_;
 	TitleScene titleScene_;
+	TitleControlGuide titleControlGuide_;
 	CountdownScene countdownScene_;
 	DifficultySelectScene difficultySelectScene_;
 	GameOverScene gameOverScene_;
 	GameClearScene gameClearScene_;
 	FallenBlockCounter fallenBlockCounter_;
+	AmbientParticleSystem ambientParticleSystem_;
 	KamataEngine::Camera uiCamera_;
 	std::array<KamataEngine::Sprite*, kDimGradientSliceCount>
 	    dimCanvasSlices_ = {};
@@ -79,8 +83,8 @@ private:
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;
 	static inline constexpr float kDimOpacity = 1.0f;
-	static inline constexpr float kDimTopAlpha = 1.0f;
-	static inline constexpr float kDimBottomAlpha = 0.3f;
+	static inline constexpr float kDimTopAlpha = 0.3f;
+	static inline constexpr float kDimBottomAlpha = 1.0f;
 	static inline constexpr float kGameOverFadeDuration = 0.75f;
 	static inline constexpr float kDifficultyBlackFadeDuration = 0.40f;
 	static inline constexpr float kCountdownRevealDuration = 0.35f;

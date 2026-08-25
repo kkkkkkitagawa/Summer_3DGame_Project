@@ -28,6 +28,9 @@ public:
 	void Update(bool allowMapRotationInput = true);
 	void Draw();
 	bool IsDebugMode() const { return isDebugMode_; }
+	const KamataEngine::Camera& GetRenderCamera() const {
+		return GetActiveCamera();
+	}
 	std::size_t GetFallenMapBlockCount() const {
 		return fallenMapBlockCount_;
 	}
@@ -222,6 +225,7 @@ private:
 	static inline const float kCoordinateTickHalfLength =
 	    6.0f / kPixelsPerWorldUnit;
 	static inline const float kInitialMapMoveSpeed = 2.0f;
+	static inline const float kPlayerForwardSpeedMultiplier = 0.5f;
 	static inline const float kEasyMapMoveSpeedMultiplier = 1.0f;
 	static inline const float kNormalMapMoveSpeedMultiplier = 1.3f;
 	static inline const float kHardMapMoveSpeedMultiplier = 1.6f;
