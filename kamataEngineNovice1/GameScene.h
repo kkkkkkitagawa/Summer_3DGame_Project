@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameData.h"
+#include "GoalStair.h"
 #include "LevelGenerator.h"
 #include "Obstacle.h"
 #include "Player.h"
@@ -19,7 +20,7 @@
 class GameScene {
 public:
 	explicit GameScene(
-	    LevelDifficulty difficulty = LevelDifficulty::Hard);
+	    LevelDifficulty difficulty = LevelDifficulty::Easy);
 	~GameScene();
 
 	void Initialize(bool obstacleGenerationEnabled = true);
@@ -29,9 +30,23 @@ public:
 	std::size_t GetFallenMapBlockCount() const {
 		return fallenMapBlockCount_;
 	}
+	bool IsGameClearReady() const {
+		return clearSequenceState_ == ClearSequenceState::Ready;
+	}
+	bool IsClearSequenceActive() const {
+		return clearSequenceState_ != ClearSequenceState::Playing;
+	}
 	std::optional<LevelDifficulty> ConsumeDifficultyChangeRequest();
 
 private:
+	enum class ClearSequenceState {
+		Playing,
+		RunwayApproach,
+		PlayerRun,
+		PlayerLaunch,
+		Ready,
+	};
+
 	struct MapBlock {
 		KamataEngine::WorldTransform worldTransform;
 		KamataEngine::WorldTransform modelWorldTransform;
@@ -44,8 +59,10 @@ private:
 		float targetRotationX = 0.0f;
 		float collisionRotationX = 0.0f;
 		bool isFalling = false;
+		bool isGoalBlock = false;
 		std::vector<std::unique_ptr<Obstacle>> obstacles;
 		std::vector<std::unique_ptr<SlimeObstacle>> slimeObstacles;
+		std::vector<std::unique_ptr<GoalStair>> goalStairs;
 	};
 
 	void InitializeMapBlocks();
@@ -64,6 +81,10 @@ private:
 	    const KamataEngine::Vector3& size,
 	    ObstacleInteractionRules interactionRules);
 	void AttachSlimeObstacle(MapBlock& block, BlockFace attachedFace);
+	void AttachGoalStairs(MapBlock& block);
+	void BeginClearSequence();
+	void UpdateClearSequence();
+	std::size_t SelectVictoryTarget() const;
 	KamataEngine::Matrix4x4 CreateMapBlockLogicalTransform(
 	    const MapBlock& block, float rotationX) const;
 	AABB GetObstacleLogicalAABB(
@@ -97,6 +118,7 @@ private:
 	KamataEngine::Model* modelObstacle_ = nullptr;
 	KamataEngine::Model* modelSlimeInner_ = nullptr;
 	KamataEngine::Model* modelSlimeOuter_ = nullptr;
+	KamataEngine::Model* modelGoalStair_ = nullptr;
 	Skydome* skydome_ = nullptr;
 	Player* player_ = nullptr;
 	KamataEngine::Sprite* mouseCircleSprite_ = nullptr;
@@ -122,10 +144,13 @@ private:
 	bool isDebugMode_ = false;
 	std::size_t debugCommandIndex_ = 0;
 	std::size_t fallenMapBlockCount_ = 0;
+	std::size_t victoryTarget_ = 0;
 	int mapRotationQuarterTurns_ = 0;
 	float blockedRotationFeedbackTime_ = 0.0f;
 	int blockedRotationFeedbackDirection_ = 0;
 	float mapMoveSpeed_ = 0.0f;
+	ClearSequenceState clearSequenceState_ = ClearSequenceState::Playing;
+	MapBlock* goalBlock_ = nullptr;
 	bool obstacleGenerationEnabled_ = true;
 	std::mt19937 obstacleVisualRandomEngine_;
 	uint32_t slimeInnerTextureHandle_ = 0;
@@ -210,6 +235,12 @@ private:
 	static inline const float kMapOutlineThicknessPixels = 1.0f;
 	static inline const float kMapOutlineThickness =
 	    kMapOutlineThicknessPixels / kPixelsPerWorldUnit;
+	static inline constexpr std::size_t kClearRunwayBlockCount = 20;
+	static inline constexpr float kGoalStopDistance = 7.0f;
+	static inline constexpr float kClearObstacleRetractionDuration = 0.4f;
+	static inline constexpr float kGoalPlayerRunSpeed = 2.0f;
+	static inline constexpr float kGoalStairOutlineThickness =
+	    1.0f / kPixelsPerWorldUnit;
 	static inline const float kShakeStartX = -1.0f;
 	static inline const float kFallStartX = -3.0f;
 	static inline const float kDeleteDistance = 200.0f / kPixelsPerWorldUnit;

@@ -54,13 +54,89 @@ void Player::Update(
 	UpdateTransforms();
 }
 
+void Player::UpdateGoalRun(float forwardSpeed, float deltaTime) {
+	logicalPosition_.x += forwardSpeed * deltaTime;
+	const float visualRadius = kModelSourceHalfSize * kModelScale.y;
+	rollingRotationZ_ -= forwardSpeed * deltaTime / visualRadius;
+	UpdateTurnJump(deltaTime);
+	UpdateTransforms();
+}
+
+void Player::StartClearLaunch() {
+	clearLaunchElapsed_ = 0.0f;
+	clearVisualOffsetX_ = 0.0f;
+	jumpVisualOffsetY_ = 0.0f;
+	animationScale_ = {1.0f, 1.0f, 1.0f};
+	isTurnJumpActive_ = false;
+	isClearLaunchFinished_ = false;
+	isVisible_ = true;
+}
+
+void Player::UpdateClearLaunch(float deltaTime) {
+	if (isClearLaunchFinished_) {
+		return;
+	}
+	clearLaunchElapsed_ =
+	    (std::min)(clearLaunchElapsed_ + deltaTime, kClearLaunchDuration);
+	const float progress = std::clamp(
+	    clearLaunchElapsed_ / kClearLaunchDuration, 0.0f, 1.0f);
+	const KamataEngine::Vector3 normalScale = {1.0f, 1.0f, 1.0f};
+	const KamataEngine::Vector3 chargeScale = {1.12f, 0.72f, 1.12f};
+	const KamataEngine::Vector3 launchScale = {0.76f, 1.34f, 0.76f};
+	auto smoothStep = [](float value) {
+		const float clampedValue = std::clamp(value, 0.0f, 1.0f);
+		return clampedValue * clampedValue *
+		       (3.0f - 2.0f * clampedValue);
+	};
+	auto lerpScale = [](
+	                     const KamataEngine::Vector3& start,
+	                     const KamataEngine::Vector3& end, float amount) {
+		return KamataEngine::Vector3{
+		    start.x + (end.x - start.x) * amount,
+		    start.y + (end.y - start.y) * amount,
+		    start.z + (end.z - start.z) * amount,
+		};
+	};
+
+	if (progress < kClearChargeEnd) {
+		const float phaseProgress =
+		    smoothStep(progress / kClearChargeEnd);
+		animationScale_ =
+		    lerpScale(normalScale, chargeScale, phaseProgress);
+		clearVisualOffsetX_ = 0.0f;
+		jumpVisualOffsetY_ = 0.0f;
+	} else {
+		const float launchProgress = std::clamp(
+		    (progress - kClearChargeEnd) / (1.0f - kClearChargeEnd),
+		    0.0f, 1.0f);
+		const float easedProgress =
+		    launchProgress * launchProgress * launchProgress;
+		animationScale_ = lerpScale(
+		    chargeScale, launchScale, smoothStep(launchProgress));
+		clearVisualOffsetX_ = kClearLaunchForwardDistance * easedProgress;
+		jumpVisualOffsetY_ = kClearLaunchHeight * easedProgress;
+		rollingRotationZ_ -= deltaTime * 12.0f;
+	}
+	UpdateTransforms();
+	if (progress >= 1.0f) {
+		isClearLaunchFinished_ = true;
+		isVisible_ = false;
+	}
+}
+
 void Player::Draw(const KamataEngine::Camera& camera) const {
+	if (!isVisible_) {
+		return;
+	}
 	model_->Draw(worldTransform_, camera);
 }
 
 void Player::DrawOutline(
     const KamataEngine::Camera& camera,
     const KamataEngine::ObjectColor& outlineColor) const {
+	if (!isVisible_) {
+		return;
+	}
 	model_->Draw(outlineWorldTransform_, camera, &outlineColor);
 }
 
@@ -167,6 +243,7 @@ void Player::UpdateTransforms() {
 	};
 	worldTransform_.rotation_.z = rollingRotationZ_;
 	worldTransform_.translation_ = logicalPosition_;
+	worldTransform_.translation_.x += clearVisualOffsetX_;
 	worldTransform_.translation_.y += jumpVisualOffsetY_;
 	outlineWorldTransform_.scale_ = {
 	    worldTransform_.scale_.x + outlineScaleExpansion_,

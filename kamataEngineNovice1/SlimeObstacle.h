@@ -18,6 +18,7 @@ public:
 	    const KamataEngine::Vector3& size);
 	void Update(float deltaTime, float gravity);
 	bool TriggerHit();
+	void StartClearRetraction(float duration);
 	void DetachAndFall(
 	    const KamataEngine::Vector3& inheritedVelocity,
 	    float repulsionSpeed);
@@ -39,6 +40,7 @@ private:
 		Alive,
 		Squashing,
 		Expanding,
+		Clearing,
 		Bursting,
 		Dead,
 	};
@@ -77,6 +79,8 @@ private:
 	float visualScale_ = 1.0f;
 	float opacity_ = 1.0f;
 	float animationTime_ = 0.0f;
+	float clearRetractionStartScale_ = 1.0f;
+	float clearRetractionDuration_ = 0.4f;
 	int hitPoints_ = 1;
 	bool isCollisionEnabled_ = true;
 	bool isFalling_ = false;
@@ -86,6 +90,8 @@ private:
 	static inline constexpr float kExpandedScale = 1.2f;
 	static inline constexpr float kSquashDuration = 0.06f;
 	static inline constexpr float kExpandDuration = 0.08f;
+	static inline constexpr float kMinimumClearScale = 0.001f;
+	static inline constexpr float kClearCollisionDisableScale = 0.3f;
 	static inline constexpr int kMinimumBurstFragmentCount = 4;
 	static inline constexpr int kMaximumBurstFragmentCount = 8;
 	static inline constexpr float kMinimumFragmentScale = 0.08f;

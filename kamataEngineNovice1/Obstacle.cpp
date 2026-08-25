@@ -27,7 +27,10 @@ void Obstacle::Initialize(
 	visualHeightScale_ = visualHeightScale;
 	visualGrowthDuration_ = visualGrowthDuration;
 	visualGrowthElapsed_ = 0.0f;
+	currentVisualHeightScale_ = kMinimumVisualHeightScale;
 	outlineThickness_ = outlineThickness;
+	isClearRetracting_ = false;
+	isDead_ = false;
 	worldTransform_.Initialize();
 	worldTransform_.parent_ = parent;
 	// Resources/cube has local bounds from -1 to +1 on every axis.
@@ -46,6 +49,9 @@ void Obstacle::Initialize(
 void Obstacle::Update(
     float deltaTime, float gravity, float timeUntilGrowthDeadline,
     bool canStartVisualGrowth) {
+	if (isDead_) {
+		return;
+	}
 	if (isFalling_) {
 		velocity_.y -= gravity * deltaTime;
 		const Vector3 movement = {
@@ -67,6 +73,27 @@ void Obstacle::Update(
 		WorldTransformUpdate(outlineWorldTransform_);
 		return;
 	}
+	if (isClearRetracting_) {
+		clearRetractionElapsed_ = (std::min)(
+		    clearRetractionDuration_, clearRetractionElapsed_ + deltaTime);
+		const float progress = std::clamp(
+		    clearRetractionElapsed_ / clearRetractionDuration_, 0.0f, 1.0f);
+		const float smoothProgress =
+		    progress * progress * (3.0f - 2.0f * progress);
+		currentVisualHeightScale_ =
+		    clearRetractionStartScale_ +
+		    (kMinimumVisualHeightScale - clearRetractionStartScale_) *
+		        smoothProgress;
+		if (currentVisualHeightScale_ <= kClearCollisionDisableScale) {
+			isCollisionEnabled_ = false;
+		}
+		WorldTransformUpdate(worldTransform_);
+		UpdateVisualTransform();
+		if (progress >= 1.0f) {
+			isDead_ = true;
+		}
+		return;
+	}
 
 	if (canStartVisualGrowth) {
 		isVisualGrowthStarted_ = true;
@@ -83,8 +110,29 @@ void Obstacle::Update(
 	    visualGrowthElapsed_,
 	    std::clamp(
 	        minimumElapsedForDeadline, 0.0f, visualGrowthDuration_));
+	const float progress = std::clamp(
+	    visualGrowthElapsed_ / visualGrowthDuration_, 0.0f, 1.0f);
+	const float smoothProgress =
+	    progress * progress * (3.0f - 2.0f * progress);
+	currentVisualHeightScale_ =
+	    kMinimumVisualHeightScale +
+	    (visualHeightScale_ - kMinimumVisualHeightScale) * smoothProgress;
 	WorldTransformUpdate(worldTransform_);
 	UpdateVisualTransform();
+}
+
+void Obstacle::StartClearRetraction(float duration) {
+	assert(duration > 0.0f);
+	if (isFalling_ || isDead_ || isClearRetracting_) {
+		return;
+	}
+	clearRetractionStartScale_ = currentVisualHeightScale_;
+	clearRetractionDuration_ = duration;
+	clearRetractionElapsed_ = 0.0f;
+	isClearRetracting_ = true;
+	if (clearRetractionStartScale_ <= kClearCollisionDisableScale) {
+		isCollisionEnabled_ = false;
+	}
 }
 
 void Obstacle::DetachAndFall(
@@ -131,31 +179,30 @@ void Obstacle::DetachAndFall(
 }
 
 void Obstacle::Draw(const Camera& camera) const {
+	if (isDead_) {
+		return;
+	}
 	model_->Draw(visualWorldTransform_, camera);
 }
 
 void Obstacle::DrawOutline(
     const Camera& camera, const ObjectColor& outlineColor) const {
+	if (isDead_) {
+		return;
+	}
 	model_->Draw(outlineWorldTransform_, camera, &outlineColor);
 }
 
 void Obstacle::UpdateVisualTransform() {
-	const float progress = std::clamp(
-	    visualGrowthElapsed_ / visualGrowthDuration_, 0.0f, 1.0f);
-	const float smoothProgress = progress * progress * (3.0f - 2.0f * progress);
-	const float currentHeightScale =
-	    kMinimumVisualHeightScale +
-	    (visualHeightScale_ - kMinimumVisualHeightScale) * smoothProgress;
-
 	Vector3 visualSize = logicalSize_;
 	switch (attachedFace_) {
 	case BlockFace::Top:
 	case BlockFace::Bottom:
-		visualSize.y *= currentHeightScale;
+		visualSize.y *= currentVisualHeightScale_;
 		break;
 	case BlockFace::Front:
 	case BlockFace::Back:
-		visualSize.z *= currentHeightScale;
+		visualSize.z *= currentVisualHeightScale_;
 		break;
 	}
 
@@ -170,7 +217,10 @@ void Obstacle::UpdateVisualTransform() {
 
 	// Grow the outline thickness with the presentation so a black slab does not
 	// appear while the obstacle itself is still visually flat.
-	const float outlineExpansion = outlineThickness_ * smoothProgress;
+	const float outlineExpansion = outlineThickness_ * std::clamp(
+	    currentVisualHeightScale_ /
+	        (std::max)(visualHeightScale_, kMinimumVisualHeightScale),
+	    0.0f, 1.0f);
 	outlineWorldTransform_.scale_ = {
 	    visualWorldTransform_.scale_.x + outlineExpansion,
 	    visualWorldTransform_.scale_.y + outlineExpansion,

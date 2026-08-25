@@ -9,6 +9,7 @@ using namespace KamataEngine;
 SceneManager::~SceneManager() {
 	DestroyDimCanvas();
 	delete blackCanvas_;
+	delete whiteCanvas_;
 }
 
 void SceneManager::Initialize() {
@@ -20,6 +21,7 @@ void SceneManager::Initialize() {
 	titleScene_.Initialize();
 	countdownScene_.Initialize();
 	gameOverScene_.Initialize();
+	gameClearScene_.Initialize();
 	fallenBlockCounter_.Initialize();
 
 	whiteTextureHandle_ = TextureManager::Load("white1x1.png");
@@ -30,6 +32,7 @@ void SceneManager::Initialize() {
 	state_ = State::Title;
 	dimCanvasAlpha_ = kDimOpacity;
 	blackCanvasAlpha_ = 0.0f;
+	whiteCanvasAlpha_ = 0.0f;
 }
 
 void SceneManager::Update() {
@@ -76,9 +79,54 @@ void SceneManager::Update() {
 		break;
 	case State::Gameplay:
 		gameScene_->Update(true);
+		if (gameScene_->IsGameClearReady()) {
+			gameClearScene_.Start();
+			EnsureWhiteCanvas();
+			whiteCanvasAlpha_ = 0.0f;
+			state_ = State::GameClearDisplay;
+			break;
+		}
 		// 仮の死亡入口。正式な死亡処理を追加した後はTriggerGameOverを呼ぶ。
-		if (gameScene_->IsDebugMode() && input->TriggerKey(DIK_SPACE)) {
+		if (!gameScene_->IsClearSequenceActive() &&
+		    gameScene_->IsDebugMode() && input->TriggerKey(DIK_SPACE)) {
 			TriggerGameOver();
+		}
+		break;
+	case State::GameClearDisplay:
+		gameClearScene_.Update();
+		whiteCanvasAlpha_ = gameClearScene_.GetCanvasOpacity();
+		if (gameClearScene_.IsReadyForInput() &&
+		    input->TriggerKey(DIK_SPACE)) {
+			transitionTime_ = 0.0f;
+			state_ = State::ClearWhiteFade;
+		}
+		break;
+	case State::ClearWhiteFade:
+		gameClearScene_.Update();
+		transitionTime_ += kDeltaTime;
+		whiteCanvasAlpha_ = 0.70f + 0.30f * std::clamp(
+		    transitionTime_ / kClearWhiteFadeDuration, 0.0f, 1.0f);
+		if (transitionTime_ >= kClearWhiteFadeDuration) {
+			whiteCanvasAlpha_ = 1.0f;
+			ResetGameScene(false);
+			titleScene_.Reset();
+			EnsureDimCanvas();
+			dimCanvasAlpha_ = kDimOpacity;
+			transitionTime_ = 0.0f;
+			state_ = State::ClearReturnReveal;
+		}
+		break;
+	case State::ClearReturnReveal:
+		gameScene_->Update(false);
+		titleScene_.Update();
+		transitionTime_ += kDeltaTime;
+		whiteCanvasAlpha_ = 1.0f - std::clamp(
+		    transitionTime_ / kClearReturnRevealDuration, 0.0f, 1.0f);
+		if (transitionTime_ >= kClearReturnRevealDuration) {
+			whiteCanvasAlpha_ = 0.0f;
+			delete whiteCanvas_;
+			whiteCanvas_ = nullptr;
+			state_ = State::Title;
 		}
 		break;
 	case State::GameOverFade:
@@ -146,6 +194,7 @@ void SceneManager::Draw() {
 	case State::Title:
 	case State::TitleExit:
 	case State::ReturnTitleReveal:
+	case State::ClearReturnReveal:
 		titleScene_.Draw(uiCamera_);
 		break;
 	case State::Countdown:
@@ -154,6 +203,14 @@ void SceneManager::Draw() {
 	case State::GameOverDisplay:
 	case State::ReturnBlackFade:
 		gameOverScene_.Draw(uiCamera_);
+		break;
+	case State::GameClearDisplay:
+		DrawWhiteCanvas(whiteCanvasAlpha_);
+		gameClearScene_.Draw(uiCamera_);
+		break;
+	case State::ClearWhiteFade:
+		gameClearScene_.Draw(uiCamera_);
+		DrawWhiteCanvas(whiteCanvasAlpha_);
 		break;
 	case State::Gameplay:
 	case State::GameOverFade:
@@ -169,6 +226,9 @@ void SceneManager::Draw() {
 	}
 
 	DrawCanvas(blackCanvas_, blackCanvasAlpha_);
+	if (state_ == State::ClearReturnReveal) {
+		DrawWhiteCanvas(whiteCanvasAlpha_);
+	}
 }
 
 void SceneManager::TriggerGameOver() {
@@ -230,6 +290,19 @@ void SceneManager::EnsureBlackCanvas() {
 	});
 }
 
+void SceneManager::EnsureWhiteCanvas() {
+	if (whiteCanvas_) {
+		return;
+	}
+	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
+	whiteCanvas_ = Sprite::Create(whiteTextureHandle_, {0.0f, 0.0f});
+	assert(whiteCanvas_);
+	whiteCanvas_->SetSize({
+	    static_cast<float>(dxCommon->GetBackBufferWidth()),
+	    static_cast<float>(dxCommon->GetBackBufferHeight()),
+	});
+}
+
 void SceneManager::DrawCanvas(Sprite* sprite, float alpha) const {
 	if (!sprite || alpha <= 0.0f) {
 		return;
@@ -237,6 +310,17 @@ void SceneManager::DrawCanvas(Sprite* sprite, float alpha) const {
 	sprite->SetColor({0.0f, 0.0f, 0.0f, std::clamp(alpha, 0.0f, 1.0f)});
 	Sprite::PreDraw();
 	sprite->Draw();
+	Sprite::PostDraw();
+}
+
+void SceneManager::DrawWhiteCanvas(float alpha) const {
+	if (!whiteCanvas_ || alpha <= 0.0f) {
+		return;
+	}
+	whiteCanvas_->SetColor(
+	    {1.0f, 1.0f, 1.0f, std::clamp(alpha, 0.0f, 1.0f)});
+	Sprite::PreDraw();
+	whiteCanvas_->Draw();
 	Sprite::PostDraw();
 }
 
@@ -277,6 +361,9 @@ void SceneManager::ApplyDifficultyAndReturnToTitle(
 	delete blackCanvas_;
 	blackCanvas_ = nullptr;
 	blackCanvasAlpha_ = 0.0f;
+	delete whiteCanvas_;
+	whiteCanvas_ = nullptr;
+	whiteCanvasAlpha_ = 0.0f;
 	EnsureDimCanvas();
 	dimCanvasAlpha_ = kDimOpacity;
 

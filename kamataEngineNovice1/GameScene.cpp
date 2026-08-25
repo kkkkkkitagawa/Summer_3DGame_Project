@@ -135,6 +135,7 @@ GameScene::~GameScene() {
 	delete modelObstacle_;
 	delete modelSlimeInner_;
 	delete modelSlimeOuter_;
+	delete modelGoalStair_;
 	delete skydome_;
 	delete modelSkydome_;
 	delete modelBlock_;
@@ -144,6 +145,9 @@ GameScene::~GameScene() {
 
 void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	fallenMapBlockCount_ = 0;
+	victoryTarget_ = SelectVictoryTarget();
+	clearSequenceState_ = ClearSequenceState::Playing;
+	goalBlock_ = nullptr;
 	switch (levelGenerator_.GetDifficulty()) {
 	case LevelDifficulty::Easy:
 		mapMoveSpeed_ =
@@ -173,6 +177,8 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	assert(modelSlimeInner_);
 	modelSlimeOuter_ = Model::CreateFromOBJ("SlimeOuter", false);
 	assert(modelSlimeOuter_);
+	modelGoalStair_ = Model::CreateFromOBJ("stairs", true);
+	assert(modelGoalStair_);
 	slimeInnerTextureHandle_ =
 	    TextureManager::Load("SlimeCube/Inner.png");
 	slimeOuterTextureHandle_ =
@@ -241,14 +247,37 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 
 void GameScene::Update(bool allowMapRotationInput) {
 	skydome_->Update();
-	player_->Update(
-	    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier,
-	    sceneMap_.origin.x, kDeltaTime);
-	if (allowMapRotationInput) {
+	switch (clearSequenceState_) {
+	case ClearSequenceState::Playing:
+	case ClearSequenceState::RunwayApproach:
+		player_->Update(
+		    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier,
+		    sceneMap_.origin.x, kDeltaTime);
+		break;
+	case ClearSequenceState::PlayerRun:
+		player_->UpdateGoalRun(kGoalPlayerRunSpeed, kDeltaTime);
+		break;
+	case ClearSequenceState::PlayerLaunch:
+		player_->UpdateClearLaunch(kDeltaTime);
+		break;
+	case ClearSequenceState::Ready:
+		break;
+	}
+	if (allowMapRotationInput &&
+	    (clearSequenceState_ == ClearSequenceState::Playing ||
+	     clearSequenceState_ == ClearSequenceState::RunwayApproach)) {
 		UpdateMapRotationInput();
 	}
 	UpdateMapBlocks();
-	if (obstacleGenerationEnabled_) {
+	if (clearSequenceState_ == ClearSequenceState::Playing &&
+	    obstacleGenerationEnabled_ &&
+	    fallenMapBlockCount_ >= victoryTarget_) {
+		BeginClearSequence();
+	}
+	UpdateClearSequence();
+	if (obstacleGenerationEnabled_ &&
+	    (clearSequenceState_ == ClearSequenceState::Playing ||
+	     clearSequenceState_ == ClearSequenceState::RunwayApproach)) {
 		ResolvePlayerObstacleCollisions();
 	}
 	UpdateDebugCommand();
@@ -265,7 +294,7 @@ GameScene::ConsumeDifficultyChangeRequest() {
 
 void GameScene::InitializeMapBlocks() {
 	mapBlocks_.clear();
-	mapBlocks_.reserve(kMapBlockCount);
+	mapBlocks_.reserve(kMapBlockCount + kClearRunwayBlockCount);
 	levelGenerator_.Reset();
 	// Keep cosmetic obstacle variations reproducible for the same level seed,
 	// without changing the level generator's gameplay random sequence.
@@ -371,6 +400,104 @@ void GameScene::AttachSlimeObstacle(
 	    &block.worldTransform,
 	    kBlockSize * 0.5f, {kBlockSize, kBlockSize, kBlockSize});
 	block.slimeObstacles.push_back(std::move(obstacle));
+}
+
+void GameScene::AttachGoalStairs(MapBlock& block) {
+	constexpr std::array<BlockFace, 4> faces = {
+	    BlockFace::Top,
+	    BlockFace::Bottom,
+	    BlockFace::Front,
+	    BlockFace::Back,
+	};
+	block.goalStairs.reserve(faces.size());
+	for (BlockFace face : faces) {
+		auto stair = std::make_unique<GoalStair>();
+		stair->Initialize(
+		    modelGoalStair_, face, &block.worldTransform,
+		    kBlockSize * 0.5f, kGoalStairOutlineThickness);
+		block.goalStairs.push_back(std::move(stair));
+	}
+}
+
+std::size_t GameScene::SelectVictoryTarget() const {
+	int minimumTarget = 90;
+	int maximumTarget = 110;
+	switch (levelGenerator_.GetDifficulty()) {
+	case LevelDifficulty::Easy:
+		break;
+	case LevelDifficulty::Normal:
+		minimumTarget = 200;
+		maximumTarget = 210;
+		break;
+	case LevelDifficulty::Hard:
+		minimumTarget = 295;
+		maximumTarget = 320;
+		break;
+	}
+	std::random_device randomDevice;
+	std::mt19937 randomEngine(randomDevice());
+	std::uniform_int_distribution<int> targetDistribution(
+	    minimumTarget, maximumTarget);
+	return static_cast<std::size_t>(targetDistribution(randomEngine));
+}
+
+void GameScene::BeginClearSequence() {
+	if (clearSequenceState_ != ClearSequenceState::Playing) {
+		return;
+	}
+	fallenMapBlockCount_ = victoryTarget_;
+	clearSequenceState_ = ClearSequenceState::RunwayApproach;
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
+			obstacle->StartClearRetraction(
+			    kClearObstacleRetractionDuration);
+		}
+		for (const std::unique_ptr<SlimeObstacle>& slime :
+		     block->slimeObstacles) {
+			slime->StartClearRetraction(kClearObstacleRetractionDuration);
+		}
+	}
+
+	float frontX = sceneMap_.origin.x - kBlockSize;
+	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
+		frontX = (std::max)(frontX, block->positionX);
+	}
+	for (std::size_t index = 0; index < kClearRunwayBlockCount; ++index) {
+		frontX += kBlockSize;
+		SpawnMapBlock(frontX, {});
+	}
+	goalBlock_ = mapBlocks_.back().get();
+	goalBlock_->isGoalBlock = true;
+	AttachGoalStairs(*goalBlock_);
+}
+
+void GameScene::UpdateClearSequence() {
+	if (!goalBlock_) {
+		return;
+	}
+	if (clearSequenceState_ == ClearSequenceState::RunwayApproach) {
+		const float distanceToGoal =
+		    goalBlock_->positionX - player_->GetWorldPosition().x;
+		if (distanceToGoal <= kGoalStopDistance) {
+			clearSequenceState_ = ClearSequenceState::PlayerRun;
+		}
+		return;
+	}
+	if (clearSequenceState_ == ClearSequenceState::PlayerRun) {
+		const float contactX =
+		    goalBlock_->positionX - kBlockSize * 0.5f -
+		    Player::kCollisionHalfSize.x;
+		if (player_->GetWorldPosition().x >= contactX) {
+			player_->SetPositionX(contactX);
+			player_->StartClearLaunch();
+			clearSequenceState_ = ClearSequenceState::PlayerLaunch;
+		}
+		return;
+	}
+	if (clearSequenceState_ == ClearSequenceState::PlayerLaunch &&
+	    player_->IsClearLaunchFinished()) {
+		clearSequenceState_ = ClearSequenceState::Ready;
+	}
 }
 
 Matrix4x4 GameScene::CreateMapBlockLogicalTransform(
@@ -522,6 +649,12 @@ float GameScene::CalculateBlockedRotationOffset() const {
 void GameScene::UpdateMapBlocks() {
 	UpdateDetachedObstacles();
 	const float blockedRotationOffset = CalculateBlockedRotationOffset();
+	const bool isMapStoppedForClear =
+	    clearSequenceState_ == ClearSequenceState::PlayerRun ||
+	    clearSequenceState_ == ClearSequenceState::PlayerLaunch ||
+	    clearSequenceState_ == ClearSequenceState::Ready;
+	const float activeMapMoveSpeed =
+	    isMapStoppedForClear ? 0.0f : mapMoveSpeed_;
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	const float screenWidth =
 	    static_cast<float>(dxCommon->GetBackBufferWidth());
@@ -529,7 +662,7 @@ void GameScene::UpdateMapBlocks() {
 	    static_cast<float>(dxCommon->GetBackBufferHeight());
 
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
-		block->positionX -= mapMoveSpeed_ * kDeltaTime;
+		block->positionX -= activeMapMoveSpeed * kDeltaTime;
 
 		bool startedFalling = false;
 		if (!block->isFalling && block->positionX < kFallStartX) {
@@ -590,6 +723,9 @@ void GameScene::UpdateMapBlocks() {
 		block->outlineWorldTransform.translation_ =
 		    block->worldTransform.translation_;
 		WorldTransformUpdate(block->outlineWorldTransform);
+		for (const std::unique_ptr<GoalStair>& stair : block->goalStairs) {
+			stair->Update();
+		}
 		const float safeMapMoveSpeed = (std::max)(mapMoveSpeed_, 0.001f);
 		const float timeUntilPlayerOrigin = (std::max)(
 		    0.0f,
@@ -609,16 +745,25 @@ void GameScene::UpdateMapBlocks() {
 		    blockScreenPosition.y >= kObstacleGrowthScreenMarginPixels &&
 		    blockScreenPosition.y <=
 		        screenHeight - kObstacleGrowthScreenMarginPixels;
-		for (std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
-			obstacle->Update(
+		for (auto iterator = block->obstacles.begin();
+		     iterator != block->obstacles.end();) {
+			Obstacle& obstacle = **iterator;
+			obstacle.Update(
 			    kDeltaTime, kGravity, timeUntilGrowthDeadline,
 			    canStartObstacleGrowth);
-			if (startedFalling) {
-				obstacle->DetachAndFall(
-				    {-mapMoveSpeed_, block->verticalVelocity, 0.0f},
-				    kObstacleDetachRepulsionSpeed);
-				detachedObstacles_.push_back(std::move(obstacle));
+			if (obstacle.IsDead()) {
+				iterator = block->obstacles.erase(iterator);
+				continue;
 			}
+			if (startedFalling) {
+				obstacle.DetachAndFall(
+				    {-activeMapMoveSpeed, block->verticalVelocity, 0.0f},
+				    kObstacleDetachRepulsionSpeed);
+				detachedObstacles_.push_back(std::move(*iterator));
+				iterator = block->obstacles.erase(iterator);
+				continue;
+			}
+			++iterator;
 		}
 		for (auto iterator = block->slimeObstacles.begin();
 		     iterator != block->slimeObstacles.end();) {
@@ -630,16 +775,13 @@ void GameScene::UpdateMapBlocks() {
 			}
 			if (startedFalling) {
 				slime.DetachAndFall(
-				    {-mapMoveSpeed_, block->verticalVelocity, 0.0f},
+				    {-activeMapMoveSpeed, block->verticalVelocity, 0.0f},
 				    kObstacleDetachRepulsionSpeed);
 				detachedSlimeObstacles_.push_back(std::move(*iterator));
 				iterator = block->slimeObstacles.erase(iterator);
 				continue;
 			}
 			++iterator;
-		}
-		if (startedFalling) {
-			block->obstacles.clear();
 		}
 	}
 	blockedRotationFeedbackTime_ = (std::max)(
@@ -656,10 +798,15 @@ void GameScene::UpdateMapBlocks() {
 	    mapBlocks_.end());
 
 	const std::size_t removedCount = oldCount - mapBlocks_.size();
-	if (obstacleGenerationEnabled_) {
-		fallenMapBlockCount_ += removedCount;
+	if (obstacleGenerationEnabled_ &&
+	    clearSequenceState_ == ClearSequenceState::Playing) {
+		fallenMapBlockCount_ = (std::min)(
+		    victoryTarget_, fallenMapBlockCount_ + removedCount);
 	}
-	for (std::size_t index = 0; index < removedCount; ++index) {
+	for (std::size_t index = 0;
+	     index < removedCount &&
+	     clearSequenceState_ == ClearSequenceState::Playing;
+	     ++index) {
 		float frontX = sceneMap_.origin.x - kBlockSize;
 		for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 			frontX = (std::max)(frontX, block->positionX);
@@ -870,6 +1017,7 @@ void GameScene::DrawDebugInfo() {
 	char levelDifficultyText[64] = {};
 	char mapMoveSpeedText[64] = {};
 	char fallenMapBlockCountText[64] = {};
+	char victoryTargetText[64] = {};
 	std::snprintf(
 	    playerPositionText, sizeof(playerPositionText), "Player X: %.1f",
 	    player_->GetWorldPosition().x);
@@ -905,6 +1053,9 @@ void GameScene::DrawDebugInfo() {
 	std::snprintf(
 	    fallenMapBlockCountText, sizeof(fallenMapBlockCountText),
 	    "Fallen Map Blocks: %zu", fallenMapBlockCount_);
+	std::snprintf(
+	    victoryTargetText, sizeof(victoryTargetText),
+	    "CLEAR TARGET: %zu", victoryTarget_);
 	char currentDifficultyText[64] = {};
 	std::snprintf(
 	    currentDifficultyText, sizeof(currentDifficultyText),
@@ -929,6 +1080,16 @@ void GameScene::DrawDebugInfo() {
 	debugText->Print(
 	    currentDifficultyText, difficultyTextX, 24.0f,
 	    difficultyTextScale);
+	if (obstacleGenerationEnabled_) {
+		const float victoryTargetTextWidth =
+		    static_cast<float>(std::strlen(victoryTargetText)) *
+		    DebugText::kFontWidth;
+		const float victoryTargetTextX =
+		    (static_cast<float>(dxCommon->GetBackBufferWidth()) -
+		     victoryTargetTextWidth) *
+		    0.5f;
+		debugText->Print(victoryTargetText, victoryTargetTextX, 44.0f, 1.0f);
+	}
 	constexpr float hertaTextWidth = 5.0f * DebugText::kFontWidth;
 	const float hertaX =
 	    static_cast<float>(dxCommon->GetBackBufferWidth()) - hertaTextWidth - 10.0f;
@@ -1117,6 +1278,9 @@ void GameScene::DrawMapBlocks() {
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			obstacle->DrawOutline(camera, outlineColor_);
 		}
+		for (const std::unique_ptr<GoalStair>& stair : block->goalStairs) {
+			stair->DrawOutline(camera, outlineColor_);
+		}
 	}
 	for (const std::unique_ptr<Obstacle>& obstacle : detachedObstacles_) {
 		obstacle->DrawOutline(camera, outlineColor_);
@@ -1131,6 +1295,9 @@ void GameScene::DrawMapBlocks() {
 		for (const std::unique_ptr<SlimeObstacle>& slime :
 		     block->slimeObstacles) {
 			slime->DrawInner(camera);
+		}
+		for (const std::unique_ptr<GoalStair>& stair : block->goalStairs) {
+			stair->Draw(camera);
 		}
 	}
 	for (const std::unique_ptr<Obstacle>& obstacle : detachedObstacles_) {

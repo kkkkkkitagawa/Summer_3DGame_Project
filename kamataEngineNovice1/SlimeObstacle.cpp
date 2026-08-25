@@ -96,6 +96,22 @@ bool SlimeObstacle::TriggerHit() {
 	return true;
 }
 
+void SlimeObstacle::StartClearRetraction(float duration) {
+	assert(duration > 0.0f);
+	if (isFalling_ || animationPhase_ == AnimationPhase::Bursting ||
+	    animationPhase_ == AnimationPhase::Dead ||
+	    animationPhase_ == AnimationPhase::Clearing) {
+		return;
+	}
+	clearRetractionStartScale_ = visualScale_;
+	clearRetractionDuration_ = duration;
+	animationTime_ = 0.0f;
+	animationPhase_ = AnimationPhase::Clearing;
+	if (visualScale_ <= kClearCollisionDisableScale) {
+		isCollisionEnabled_ = false;
+	}
+}
+
 void SlimeObstacle::DetachAndFall(
     const Vector3& inheritedVelocity, float repulsionSpeed) {
 	if (!IsAttached()) {
@@ -245,6 +261,22 @@ void SlimeObstacle::UpdateAnimation(float deltaTime) {
 	case AnimationPhase::Bursting:
 	case AnimationPhase::Dead:
 		return;
+	case AnimationPhase::Clearing: {
+		animationTime_ = (std::min)(
+		    animationTime_ + deltaTime, clearRetractionDuration_);
+		const float progress =
+		    SmoothStep(animationTime_ / clearRetractionDuration_);
+		visualScale_ = Lerp(
+		    clearRetractionStartScale_, kMinimumClearScale, progress);
+		if (visualScale_ <= kClearCollisionDisableScale) {
+			isCollisionEnabled_ = false;
+		}
+		if (animationTime_ >= clearRetractionDuration_) {
+			animationPhase_ = AnimationPhase::Dead;
+			opacity_ = 0.0f;
+		}
+		return;
+	}
 	case AnimationPhase::Squashing: {
 		animationTime_ =
 		    (std::min)(animationTime_ + deltaTime, kSquashDuration);

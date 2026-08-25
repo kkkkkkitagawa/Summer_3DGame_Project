@@ -35,6 +35,7 @@ public:
 	void DetachAndFall(
 	    const KamataEngine::Vector3& inheritedVelocity,
 	    float repulsionSpeed);
+	void StartClearRetraction(float duration);
 	void Draw(const KamataEngine::Camera& camera) const;
 	void DrawOutline(
 	    const KamataEngine::Camera& camera,
@@ -55,6 +56,7 @@ public:
 	bool IsAttached() const { return worldTransform_.parent_ != nullptr; }
 	bool IsFalling() const { return isFalling_; }
 	bool IsCollisionEnabled() const { return isCollisionEnabled_; }
+	bool IsDead() const { return isDead_; }
 	void SetCollisionEnabled(bool isEnabled) {
 		isCollisionEnabled_ = isEnabled;
 	}
@@ -77,12 +79,19 @@ private:
 	float visualHeightScale_ = 1.0f;
 	float visualGrowthDuration_ = 1.0f;
 	float visualGrowthElapsed_ = 0.0f;
+	float currentVisualHeightScale_ = 0.001f;
+	float clearRetractionStartScale_ = 1.0f;
+	float clearRetractionDuration_ = 0.4f;
+	float clearRetractionElapsed_ = 0.0f;
 	float outlineThickness_ = 0.0f;
 	bool isVisualGrowthStarted_ = false;
 	bool isCollisionEnabled_ = true;
 	bool isFalling_ = false;
+	bool isClearRetracting_ = false;
+	bool isDead_ = false;
 
 	// A truly zero scale makes the lighting inverse matrix singular. This value
 	// is visually flat while keeping the render transform valid.
 	static inline constexpr float kMinimumVisualHeightScale = 0.001f;
+	static inline constexpr float kClearCollisionDisableScale = 0.3f;
 };
