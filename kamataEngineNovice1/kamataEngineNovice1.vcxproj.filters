@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
 	<ClCompile Include="AmbientParticleSystem.cpp" />
+	<ClCompile Include="ClearCelebrationEffect.cpp" />
 	<ClCompile Include="DeathHazardLine.cpp" />
 	<ClCompile Include="DifficultySelectScene.cpp" />
 	<ClCompile Include="FallenBlockCounter.cpp" />
@@ -36,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
 	<ClInclude Include="AmbientParticleSystem.h" />
+	<ClInclude Include="ClearCelebrationEffect.h" />
 	<ClInclude Include="DeathHazardLine.h" />
 	<ClInclude Include="DifficultySelectScene.h" />
 	<ClInclude Include="FallenBlockCounter.h" />

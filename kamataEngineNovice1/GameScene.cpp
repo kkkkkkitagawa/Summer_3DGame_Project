@@ -206,6 +206,7 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	        3.0f / kPixelsPerWorldUnit,
 	    sceneMap_.origin.z,
 	});
+	clearCelebrationEffect_.Initialize();
 
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
@@ -303,6 +304,22 @@ void GameScene::Update(bool allowMapRotationInput) {
 		BeginDeathSequence();
 	}
 	UpdateCamera();
+}
+
+void GameScene::UpdateCelebrationEffect() {
+	clearCelebrationEffect_.Update(kDeltaTime);
+}
+
+void GameScene::DrawCelebrationEffect() const {
+	clearCelebrationEffect_.Draw();
+}
+
+void GameScene::StartDifficultySelectCelebration() {
+	clearCelebrationEffect_.StartDifficultySelectCelebration();
+}
+
+void GameScene::StopDifficultySelectCelebration() {
+	clearCelebrationEffect_.StopDifficultySelectCelebration();
 }
 
 std::optional<LevelDifficulty>
@@ -467,6 +484,8 @@ void GameScene::BeginClearSequence() {
 	}
 	fallenMapBlockCount_ = victoryTarget_;
 	clearSequenceState_ = ClearSequenceState::RunwayApproach;
+	clearCelebrationEffect_.StartFireworks(
+	    kClearObstacleRetractionDuration);
 	for (const std::unique_ptr<MapBlock>& block : mapBlocks_) {
 		for (const std::unique_ptr<Obstacle>& obstacle : block->obstacles) {
 			obstacle->StartClearRetraction(
@@ -510,6 +529,7 @@ void GameScene::UpdateClearSequence() {
 		if (player_->GetWorldPosition().x >= contactX) {
 			player_->SetPositionX(contactX);
 			player_->StartClearLaunch();
+			clearCelebrationEffect_.StartConfetti();
 			clearSequenceState_ = ClearSequenceState::PlayerLaunch;
 		}
 		return;
@@ -1471,6 +1491,10 @@ void GameScene::DrawCollisionBox(
 }
 
 void GameScene::DrawMapGrid() {
+	if (!isDebugMode_) {
+		return;
+	}
+
 	primitiveDrawer_->Reset();
 	primitiveDrawer_->SetCamera(&GetActiveCamera());
 

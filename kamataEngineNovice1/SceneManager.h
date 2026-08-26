@@ -78,6 +78,8 @@ private:
 	float blackCanvasAlpha_ = 0.0f;
 	float whiteCanvasAlpha_ = 0.0f;
 	bool gameplayStartedDuringCountdown_ = false;
+	std::array<bool, 3> clearedDifficulties_ = {};
+	bool allDifficultiesCleared_ = false;
 	LevelDifficulty selectedDifficulty_ = LevelDifficulty::Easy;
 	LevelDifficulty maximumUnlockedDifficulty_ = LevelDifficulty::Easy;
 

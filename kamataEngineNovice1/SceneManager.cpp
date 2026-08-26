@@ -61,6 +61,9 @@ void SceneManager::Update() {
 			    gameScene_->IsDebugMode()
 			        ? LevelDifficulty::Hard
 			        : maximumUnlockedDifficulty_);
+			if (allDifficultiesCleared_) {
+				gameScene_->StartDifficultySelectCelebration();
+			}
 			state_ = State::DifficultySelect;
 		}
 		break;
@@ -83,6 +86,7 @@ void SceneManager::Update() {
 			}
 		}
 		if (difficultySelectScene_.IsConfirmationFinished()) {
+			gameScene_->StopDifficultySelectCelebration();
 			selectedDifficulty_ =
 			    difficultySelectScene_.GetSelectedDifficulty();
 			transitionTime_ = 0.0f;
@@ -242,6 +246,7 @@ void SceneManager::Update() {
 	}
 
 	if (gameScene_) {
+		gameScene_->UpdateCelebrationEffect();
 		ambientParticleSystem_.Update(gameScene_->GetRenderCamera());
 		const std::optional<LevelDifficulty> difficultyRequest =
 		    gameScene_->ConsumeDifficultyChangeRequest();
@@ -298,6 +303,7 @@ void SceneManager::Draw() {
 	if (showFallenBlockCounter) {
 		fallenBlockCounter_.Draw(uiCamera_);
 	}
+	gameScene_->DrawCelebrationEffect();
 
 	DrawCanvas(blackCanvas_, blackCanvasAlpha_);
 	if (state_ == State::ClearReturnReveal) {
@@ -448,6 +454,14 @@ void SceneManager::ApplyDifficultyAndReturnToTitle(
 }
 
 void SceneManager::UnlockNextDifficultyAfterClear() {
+	const std::size_t clearedIndex =
+	    static_cast<std::size_t>(selectedDifficulty_);
+	assert(clearedIndex < clearedDifficulties_.size());
+	clearedDifficulties_[clearedIndex] = true;
+	allDifficultiesCleared_ = std::all_of(
+	    clearedDifficulties_.begin(), clearedDifficulties_.end(),
+	    [](bool isCleared) { return isCleared; });
+
 	if (selectedDifficulty_ == LevelDifficulty::Easy &&
 	    maximumUnlockedDifficulty_ == LevelDifficulty::Easy) {
 		maximumUnlockedDifficulty_ = LevelDifficulty::Normal;

@@ -170,6 +170,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</C
   <ItemGroup>
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp" />
 	<ClCompile Include="AmbientParticleSystem.cpp" />
+	<ClCompile Include="ClearCelebrationEffect.cpp" />
 	<ClCompile Include="CountdownScene.cpp" />
 	<ClCompile Include="DeathHazardLine.cpp" />
 	<ClCompile Include="DifficultySelectScene.cpp" />
@@ -191,6 +192,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</C
   </ItemGroup>
   <ItemGroup>
 	<ClInclude Include="AmbientParticleSystem.h" />
+	<ClInclude Include="ClearCelebrationEffect.h" />
 	<ClInclude Include="CountdownScene.h" />
 	<ClInclude Include="DeathHazardLine.h" />
 	<ClInclude Include="DifficultySelectScene.h" />

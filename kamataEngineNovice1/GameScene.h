@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClearCelebrationEffect.h"
 #include "DeathHazardLine.h"
 #include "GameData.h"
 #include "GoalStair.h"
@@ -26,6 +27,10 @@ public:
 
 	void Initialize(bool obstacleGenerationEnabled = true);
 	void Update(bool allowMapRotationInput = true);
+	void UpdateCelebrationEffect();
+	void DrawCelebrationEffect() const;
+	void StartDifficultySelectCelebration();
+	void StopDifficultySelectCelebration();
 	void Draw();
 	bool IsDebugMode() const { return isDebugMode_; }
 	const KamataEngine::Camera& GetRenderCamera() const {
@@ -144,6 +149,7 @@ private:
 	// SceneManagerで選択された難度の生成規則と採用済みシードを使用する。
 	LevelGenerator levelGenerator_;
 	DeathHazardLine deathHazardLine_;
+	ClearCelebrationEffect clearCelebrationEffect_;
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
