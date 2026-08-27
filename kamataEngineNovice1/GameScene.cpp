@@ -124,7 +124,7 @@ bool ProjectWorldToScreen(
 } // namespace
 
 GameScene::GameScene(LevelDifficulty difficulty)
-    : levelGenerator_(difficulty) {}
+    : difficulty_(difficulty), fixedLevelData_(&GetFixedLevelData(difficulty)) {}
 
 GameScene::~GameScene() {
 	mapBlocks_.clear();
@@ -144,7 +144,7 @@ GameScene::~GameScene() {
 }
 
 void GameScene::Initialize(
-    bool obstacleGenerationEnabled, const GameSfxHandles& sfxHandles) {
+    bool obstaclesEnabled, const GameSfxHandles& sfxHandles) {
 	sfxHandles_ = sfxHandles;
 	fallenMapBlockCount_ = 0;
 	victoryTarget_ = SelectVictoryTarget();
@@ -152,7 +152,7 @@ void GameScene::Initialize(
 	deathSequenceState_ = DeathSequenceState::Inactive;
 	deathSequenceTime_ = 0.0f;
 	goalBlock_ = nullptr;
-	switch (levelGenerator_.GetDifficulty()) {
+	switch (difficulty_) {
 	case LevelDifficulty::Easy:
 		mapMoveSpeed_ =
 		    kInitialMapMoveSpeed * kEasyMapMoveSpeedMultiplier;
@@ -166,7 +166,7 @@ void GameScene::Initialize(
 		    kInitialMapMoveSpeed * kHardMapMoveSpeedMultiplier;
 		break;
 	}
-	obstacleGenerationEnabled_ = obstacleGenerationEnabled;
+	obstaclesEnabled_ = obstaclesEnabled;
 
 	modelSkydome_ = Model::CreateFromOBJ("SkyDome", true);
 	assert(modelSkydome_);
@@ -292,12 +292,12 @@ void GameScene::Update(bool allowMapRotationInput) {
 	}
 	UpdateMapBlocks();
 	if (clearSequenceState_ == ClearSequenceState::Playing &&
-	    obstacleGenerationEnabled_ &&
+	    obstaclesEnabled_ &&
 	    fallenMapBlockCount_ >= victoryTarget_) {
 		BeginClearSequence();
 	}
 	UpdateClearSequence();
-	if (obstacleGenerationEnabled_ &&
+	if (obstaclesEnabled_ &&
 	    (clearSequenceState_ == ClearSequenceState::Playing ||
 	     clearSequenceState_ == ClearSequenceState::RunwayApproach)) {
 		ResolvePlayerObstacleCollisions();
@@ -339,25 +339,31 @@ GameScene::ConsumeDifficultyChangeRequest() {
 void GameScene::InitializeMapBlocks() {
 	mapBlocks_.clear();
 	mapBlocks_.reserve(kMapBlockCount + kClearRunwayBlockCount);
-	levelGenerator_.Reset();
-	// Keep cosmetic obstacle variations reproducible for the same level seed,
-	// without changing the level generator's gameplay random sequence.
-	obstacleVisualRandomEngine_.seed(levelGenerator_.GetSeed() ^ 0xA511E9B3u);
+	nextFixedBlockIndex_ = 0;
+	// Keep cosmetic obstacle variations identical to the finalized map.
+	obstacleVisualRandomEngine_.seed(
+	    fixedLevelData_->visualSeed ^ 0xA511E9B3u);
 	for (std::size_t index = 0; index < kMapBlockCount; ++index) {
-		const MapBlockSpawnPlan spawnPlan =
-		    !obstacleGenerationEnabled_
-		        ? MapBlockSpawnPlan{}
-		        : index < kInitialSafeBlockCount
-		        ? levelGenerator_.CreateInitialBlockPlan()
-		        : levelGenerator_.CreateReplacementBlockPlan();
+		const FixedBlockDefinition blockDefinition =
+		    !obstaclesEnabled_ || index < kInitialSafeBlockCount
+		        ? FixedBlockDefinition{}
+		        : ConsumeNextFixedBlock();
 		SpawnMapBlock(
 		    sceneMap_.origin.x + static_cast<float>(index) * kBlockSize,
-		    spawnPlan);
+		    blockDefinition);
 	}
 }
 
+FixedBlockDefinition GameScene::ConsumeNextFixedBlock() {
+	if (nextFixedBlockIndex_ >= fixedLevelData_->blockCount) {
+		assert(false);
+		return {};
+	}
+	return fixedLevelData_->blocks[nextFixedBlockIndex_++];
+}
+
 void GameScene::SpawnMapBlock(
-    float positionX, const MapBlockSpawnPlan& spawnPlan) {
+    float positionX, const FixedBlockDefinition& blockDefinition) {
 	auto block = std::make_unique<MapBlock>();
 	block->positionX = positionX;
 	block->positionY = sceneMap_.groundHeight;
@@ -387,16 +393,23 @@ void GameScene::SpawnMapBlock(
 	block->outlineWorldTransform.rotation_ = block->worldTransform.rotation_;
 	block->outlineWorldTransform.translation_ = block->worldTransform.translation_;
 	WorldTransformUpdate(block->outlineWorldTransform);
-	for (const ObstacleSpawnPlan& obstaclePlan : spawnPlan.obstacles) {
-		switch (obstaclePlan.type) {
-		case ObstacleType::Normal:
+	// Preserve the finalized map's original solver-face order so each face keeps
+	// the same seeded cosmetic height and growth duration.
+	constexpr std::array<BlockFace, 4> attachmentOrder = {
+	    BlockFace::Top,
+	    BlockFace::Front,
+	    BlockFace::Bottom,
+	    BlockFace::Back,
+	};
+	for (BlockFace attachedFace : attachmentOrder) {
+		const uint8_t faceBit =
+		    static_cast<uint8_t>(1u << static_cast<uint8_t>(attachedFace));
+		if ((blockDefinition.slimeObstacleFaces & faceBit) != 0) {
+			AttachSlimeObstacle(*block, attachedFace);
+		} else if ((blockDefinition.normalObstacleFaces & faceBit) != 0) {
 			AttachObstacle(
-			    *block, modelObstacle_, obstaclePlan.attachedFace,
-			    obstaclePlan.size, obstaclePlan.interactionRules);
-			break;
-		case ObstacleType::Slime:
-			AttachSlimeObstacle(*block, obstaclePlan.attachedFace);
-			break;
+			    *block, modelObstacle_, attachedFace,
+			    {1.0f, 1.0f, 1.0f}, {});
 		}
 	}
 	mapBlocks_.push_back(std::move(block));
@@ -466,7 +479,7 @@ void GameScene::AttachGoalStairs(MapBlock& block) {
 std::size_t GameScene::SelectVictoryTarget() const {
 	int minimumTarget = 90;
 	int maximumTarget = 110;
-	switch (levelGenerator_.GetDifficulty()) {
+	switch (difficulty_) {
 	case LevelDifficulty::Easy:
 		break;
 	case LevelDifficulty::Normal:
@@ -905,7 +918,7 @@ void GameScene::UpdateMapBlocks() {
 	    mapBlocks_.end());
 
 	const std::size_t removedCount = oldCount - mapBlocks_.size();
-	if (obstacleGenerationEnabled_ &&
+	if (obstaclesEnabled_ &&
 	    clearSequenceState_ == ClearSequenceState::Playing) {
 		fallenMapBlockCount_ = (std::min)(
 		    victoryTarget_, fallenMapBlockCount_ + removedCount);
@@ -920,9 +933,8 @@ void GameScene::UpdateMapBlocks() {
 		}
 		SpawnMapBlock(
 		    frontX + kBlockSize,
-		    obstacleGenerationEnabled_
-		        ? levelGenerator_.CreateReplacementBlockPlan()
-		        : MapBlockSpawnPlan{});
+		    obstaclesEnabled_ ? ConsumeNextFixedBlock()
+		                      : FixedBlockDefinition{});
 	}
 }
 
@@ -1126,7 +1138,6 @@ void GameScene::DrawDebugInfo() {
 	char cameraPositionText[128] = {};
 	char cameraRotationText[128] = {};
 	char solverFaceText[96] = {};
-	char levelSeedText[64] = {};
 	char levelDifficultyText[64] = {};
 	char mapMoveSpeedText[64] = {};
 	char fallenMapBlockCountText[64] = {};
@@ -1155,11 +1166,8 @@ void GameScene::DrawDebugInfo() {
 	    "Solver Face: %d deg  (D: +90 / A: -90)",
 	    solverFaceIndex * 90);
 	std::snprintf(
-	    levelSeedText, sizeof(levelSeedText), "Level Seed: %u",
-	    levelGenerator_.GetSeed());
-	std::snprintf(
 	    levelDifficultyText, sizeof(levelDifficultyText),
-	    "Level Difficulty: %s", levelGenerator_.GetDifficultyName());
+	    "Level Difficulty: %s", GetLevelDifficultyName(difficulty_));
 	std::snprintf(
 	    mapMoveSpeedText, sizeof(mapMoveSpeedText),
 	    "Map Move Speed: %.2f", mapMoveSpeed_);
@@ -1172,15 +1180,14 @@ void GameScene::DrawDebugInfo() {
 	char currentDifficultyText[64] = {};
 	std::snprintf(
 	    currentDifficultyText, sizeof(currentDifficultyText),
-	    "CURRENT DIFFICULTY: %s", levelGenerator_.GetDifficultyName());
+	    "CURRENT DIFFICULTY: %s", GetLevelDifficultyName(difficulty_));
 	debugText->Print(playerPositionText, 10.0f, 10.0f, 1.0f);
 	debugText->Print(cameraPositionText, 10.0f, 30.0f, 1.0f);
 	debugText->Print(cameraRotationText, 10.0f, 50.0f, 1.0f);
 	debugText->Print(solverFaceText, 10.0f, 70.0f, 1.0f);
-	debugText->Print(levelSeedText, 10.0f, 90.0f, 1.0f);
-	debugText->Print(levelDifficultyText, 10.0f, 110.0f, 1.0f);
-	debugText->Print(mapMoveSpeedText, 10.0f, 130.0f, 1.0f);
-	debugText->Print(fallenMapBlockCountText, 10.0f, 150.0f, 1.0f);
+	debugText->Print(levelDifficultyText, 10.0f, 90.0f, 1.0f);
+	debugText->Print(mapMoveSpeedText, 10.0f, 110.0f, 1.0f);
+	debugText->Print(fallenMapBlockCountText, 10.0f, 130.0f, 1.0f);
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	constexpr float difficultyTextScale = 1.0f;
 	const float difficultyTextWidth =
@@ -1193,7 +1200,7 @@ void GameScene::DrawDebugInfo() {
 	debugText->Print(
 	    currentDifficultyText, difficultyTextX, 24.0f,
 	    difficultyTextScale);
-	if (obstacleGenerationEnabled_) {
+	if (obstaclesEnabled_) {
 		const float victoryTargetTextWidth =
 		    static_cast<float>(std::strlen(victoryTargetText)) *
 		    DebugText::kFontWidth;

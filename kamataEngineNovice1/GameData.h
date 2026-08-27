@@ -4,6 +4,24 @@
 
 #include <cstdint>
 
+enum class LevelDifficulty : uint8_t {
+	Easy,
+	Normal,
+	Hard,
+};
+
+inline const char* GetLevelDifficultyName(LevelDifficulty difficulty) {
+	switch (difficulty) {
+	case LevelDifficulty::Easy:
+		return "EASY";
+	case LevelDifficulty::Normal:
+		return "NORMAL";
+	case LevelDifficulty::Hard:
+		return "HARD";
+	}
+	return "UNKNOWN";
+}
+
 // シーンマップの基礎データ
 struct SceneMapData {
 	KamataEngine::Vector3 origin = {0.0f, 0.0f, 0.0f};

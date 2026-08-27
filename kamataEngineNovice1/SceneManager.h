@@ -46,7 +46,7 @@ private:
 	};
 	static inline constexpr std::size_t kDimGradientSliceCount = 96;
 
-	void ResetGameScene(bool obstacleGenerationEnabled);
+	void ResetGameScene(bool obstaclesEnabled);
 	void LoadAudioResources();
 	void PlayBgm(uint32_t soundHandle, bool loop);
 	void PlaySfx(uint32_t soundHandle);

@@ -420,10 +420,10 @@ void SceneManager::TriggerGameOver() {
 	state_ = State::GameOverFade;
 }
 
-void SceneManager::ResetGameScene(bool obstacleGenerationEnabled) {
+void SceneManager::ResetGameScene(bool obstaclesEnabled) {
 	gameScene_ = std::make_unique<GameScene>(selectedDifficulty_);
 	gameScene_->Initialize(
-	    obstacleGenerationEnabled,
+	    obstaclesEnabled,
 	    GameSfxHandles{
 	        .debugModeSoundHandle = debugModeSfxSoundHandle_,
 	        .failSoundHandle = failSoundHandle_,

@@ -1,7 +1,7 @@
 #pragma once
 
+#include "GameData.h"
 #include "KamataEngine.h"
-#include "LevelGenerator.h"
 
 #include <array>
 #include <cstddef>

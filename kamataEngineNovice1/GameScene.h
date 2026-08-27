@@ -3,9 +3,9 @@
 #include "ClearCelebrationEffect.h"
 #include "DeathHazardLine.h"
 #include "FloatingBlockSystem.h"
+#include "FixedLevelData.h"
 #include "GameData.h"
 #include "GoalStair.h"
-#include "LevelGenerator.h"
 #include "Obstacle.h"
 #include "Player.h"
 #include "Skydome.h"
@@ -37,7 +37,7 @@ public:
 	~GameScene();
 
 	void Initialize(
-	    bool obstacleGenerationEnabled,
+	    bool obstaclesEnabled,
 	    const GameSfxHandles& sfxHandles);
 	void Update(bool allowMapRotationInput = true);
 	void UpdateCelebrationEffect();
@@ -106,8 +106,9 @@ private:
 	void UpdateMapBlocks();
 	void UpdateDetachedObstacles();
 	void ResolvePlayerObstacleCollisions();
+	FixedBlockDefinition ConsumeNextFixedBlock();
 	void SpawnMapBlock(
-	    float positionX, const MapBlockSpawnPlan& spawnPlan);
+	    float positionX, const FixedBlockDefinition& blockDefinition);
 	void AttachObstacle(
 	    MapBlock& block, KamataEngine::Model* model, BlockFace attachedFace,
 	    const KamataEngine::Vector3& size,
@@ -160,8 +161,9 @@ private:
 	std::vector<std::unique_ptr<MapBlock>> mapBlocks_;
 	std::vector<std::unique_ptr<Obstacle>> detachedObstacles_;
 	std::vector<std::unique_ptr<SlimeObstacle>> detachedSlimeObstacles_;
-	// SceneManagerで選択された難度の生成規則と採用済みシードを使用する。
-	LevelGenerator levelGenerator_;
+	LevelDifficulty difficulty_ = LevelDifficulty::Easy;
+	const FixedLevelData* fixedLevelData_ = nullptr;
+	std::size_t nextFixedBlockIndex_ = 0;
 	DeathHazardLine deathHazardLine_;
 	FloatingBlockSystem floatingBlockSystem_;
 	ClearCelebrationEffect clearCelebrationEffect_;
@@ -194,7 +196,7 @@ private:
 	KamataEngine::Vector3 deathCameraStartPosition_ = {};
 	KamataEngine::Vector3 deathCameraStartRotation_ = {};
 	MapBlock* goalBlock_ = nullptr;
-	bool obstacleGenerationEnabled_ = true;
+	bool obstaclesEnabled_ = true;
 	std::mt19937 obstacleVisualRandomEngine_;
 	uint32_t slimeInnerTextureHandle_ = 0;
 	uint32_t slimeOuterTextureHandle_ = 0;

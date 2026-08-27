@@ -22,6 +22,7 @@
 	<ClCompile Include="DifficultySelectScene.cpp" />
 	<ClCompile Include="FallenBlockCounter.cpp" />
 	<ClCompile Include="FloatingBlockSystem.cpp" />
+	<ClCompile Include="FixedLevelData.cpp" />
 	<ClCompile Include="GameClearScene.cpp" />
     <ClCompile Include="GameScene.cpp" />
 	<ClCompile Include="GoalStair.cpp" />
@@ -44,6 +45,7 @@
 	<ClInclude Include="DifficultySelectScene.h" />
 	<ClInclude Include="FallenBlockCounter.h" />
 	<ClInclude Include="FloatingBlockSystem.h" />
+	<ClInclude Include="FixedLevelData.h" />
 	<ClInclude Include="GameClearScene.h" />
     <ClInclude Include="GameData.h" />
     <ClInclude Include="GameScene.h" />
