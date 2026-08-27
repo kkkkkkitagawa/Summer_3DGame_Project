@@ -2,6 +2,7 @@
 
 #include "ClearCelebrationEffect.h"
 #include "DeathHazardLine.h"
+#include "FloatingBlockSystem.h"
 #include "GameData.h"
 #include "GoalStair.h"
 #include "LevelGenerator.h"
@@ -9,6 +10,7 @@
 #include "Player.h"
 #include "Skydome.h"
 #include "SlimeObstacle.h"
+#include "SlowdownTrailEffect.h"
 
 #include <array>
 #include <cstddef>
@@ -19,13 +21,24 @@
 #include <string>
 #include <vector>
 
+struct GameSfxHandles {
+	uint32_t debugModeSoundHandle = 0;
+	uint32_t failSoundHandle = 0;
+	uint32_t jumpSoundHandle = 0;
+	uint32_t slimeSoundHandle = 0;
+	uint32_t fireworksSoundHandle = 0;
+	uint32_t stairJumpSoundHandle = 0;
+};
+
 class GameScene {
 public:
 	explicit GameScene(
 	    LevelDifficulty difficulty = LevelDifficulty::Easy);
 	~GameScene();
 
-	void Initialize(bool obstacleGenerationEnabled = true);
+	void Initialize(
+	    bool obstacleGenerationEnabled,
+	    const GameSfxHandles& sfxHandles);
 	void Update(bool allowMapRotationInput = true);
 	void UpdateCelebrationEffect();
 	void DrawCelebrationEffect() const;
@@ -89,6 +102,7 @@ private:
 	    int turnDirection, int quarterTurnCount) const;
 	void StartBlockedRotationFeedback(int turnDirection);
 	float CalculateBlockedRotationOffset() const;
+	bool IsMapMovementStoppedForClear() const;
 	void UpdateMapBlocks();
 	void UpdateDetachedObstacles();
 	void ResolvePlayerObstacleCollisions();
@@ -149,7 +163,10 @@ private:
 	// SceneManagerで選択された難度の生成規則と採用済みシードを使用する。
 	LevelGenerator levelGenerator_;
 	DeathHazardLine deathHazardLine_;
+	FloatingBlockSystem floatingBlockSystem_;
 	ClearCelebrationEffect clearCelebrationEffect_;
+	SlowdownTrailEffect slowdownTrailEffect_;
+	GameSfxHandles sfxHandles_;
 
 	SceneMapData sceneMap_;
 	KamataEngine::WorldTransform worldTransformAxis_;
@@ -247,6 +264,8 @@ private:
 	static inline const float kObstacleDetachRepulsionSpeed = 1.5f;
 	static inline constexpr float kSlimeKnockbackDistance = 1.5f;
 	static inline constexpr float kSlimeKnockbackDuration = 0.25f;
+	static inline constexpr float kSlimeSlowdownDuration = 1.8f;
+	static inline constexpr float kSlimeSpeedMultiplier = 0.70f;
 	static inline const int kMinObstacleVisualHeightHundredths = 80;
 	static inline const int kMaxObstacleVisualHeightHundredths = 400;
 	static inline const float kMinObstacleVisualGrowthDuration = 2.5f;

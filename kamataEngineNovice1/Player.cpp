@@ -24,6 +24,10 @@ void Player::Initialize(
 
 void Player::Update(
     float forwardSpeed, float maximumPositionX, float deltaTime) {
+	UpdateSlowdown(deltaTime);
+	const float effectiveForwardSpeed =
+	    forwardSpeed *
+	    (isSlowdownActive_ ? slowdownSpeedMultiplier_ : 1.0f);
 	const float previousPositionX = logicalPosition_.x;
 	const bool wasKnockbackActive = isKnockbackActive_;
 	if (wasKnockbackActive) {
@@ -42,12 +46,12 @@ void Player::Update(
 	} else {
 		logicalPosition_.x = (std::min)(
 		    maximumPositionX,
-		    logicalPosition_.x + forwardSpeed * deltaTime);
+		    logicalPosition_.x + effectiveForwardSpeed * deltaTime);
 	}
 
 	const float visualTravel = wasKnockbackActive
 	                               ? logicalPosition_.x - previousPositionX
-	                               : forwardSpeed * deltaTime;
+	                               : effectiveForwardSpeed * deltaTime;
 	const float visualRadius = kModelSourceHalfSize * kModelScale.y;
 	rollingRotationZ_ -= visualTravel / visualRadius;
 	UpdateTurnJump(deltaTime);
@@ -55,9 +59,13 @@ void Player::Update(
 }
 
 void Player::UpdateGoalRun(float forwardSpeed, float deltaTime) {
-	logicalPosition_.x += forwardSpeed * deltaTime;
+	UpdateSlowdown(deltaTime);
+	const float effectiveForwardSpeed =
+	    forwardSpeed *
+	    (isSlowdownActive_ ? slowdownSpeedMultiplier_ : 1.0f);
+	logicalPosition_.x += effectiveForwardSpeed * deltaTime;
 	const float visualRadius = kModelSourceHalfSize * kModelScale.y;
-	rollingRotationZ_ -= forwardSpeed * deltaTime / visualRadius;
+	rollingRotationZ_ -= effectiveForwardSpeed * deltaTime / visualRadius;
 	UpdateTurnJump(deltaTime);
 	UpdateTransforms();
 }
@@ -68,6 +76,7 @@ void Player::StartClearLaunch() {
 	jumpVisualOffsetY_ = 0.0f;
 	animationScale_ = {1.0f, 1.0f, 1.0f};
 	isTurnJumpActive_ = false;
+	isSlowdownActive_ = false;
 	isClearLaunchFinished_ = false;
 	isVisible_ = true;
 }
@@ -132,6 +141,7 @@ void Player::StartDeathFall() {
 	jumpVisualOffsetY_ = 0.0f;
 	animationScale_ = {1.0f, 1.0f, 1.0f};
 	isKnockbackActive_ = false;
+	isSlowdownActive_ = false;
 	isTurnJumpActive_ = false;
 	isDeathFallFinished_ = false;
 	isVisible_ = true;
@@ -194,6 +204,27 @@ void Player::StartKnockback(float distance, float duration) {
 	knockbackDuration_ = duration;
 	knockbackElapsed_ = 0.0f;
 	isKnockbackActive_ = true;
+}
+
+void Player::StartSlowdown(float duration, float speedMultiplier) {
+	assert(duration > 0.0f);
+	assert(speedMultiplier > 0.0f && speedMultiplier < 1.0f);
+	slowdownDuration_ = duration;
+	slowdownElapsed_ = 0.0f;
+	slowdownSpeedMultiplier_ = speedMultiplier;
+	isSlowdownActive_ = true;
+}
+
+void Player::UpdateSlowdown(float deltaTime) {
+	if (!isSlowdownActive_) {
+		return;
+	}
+	slowdownElapsed_ =
+	    (std::min)(slowdownElapsed_ + deltaTime, slowdownDuration_);
+	if (slowdownElapsed_ >= slowdownDuration_) {
+		isSlowdownActive_ = false;
+		slowdownSpeedMultiplier_ = 1.0f;
+	}
 }
 
 void Player::StartTurnJump() {

@@ -3,12 +3,14 @@
 #include "WorldTransformUpdate.h"
 
 #include <cassert>
+#include <numbers>
+#include <random>
 
 void Skydome::Initialize(KamataEngine::Model* model) {
 	assert(model);
 	model_ = model;
 	textureHandle_ =
-	    KamataEngine::TextureManager::Load("SkyDome/sky_sphere.png");
+	    KamataEngine::TextureManager::Load("SkyDome/sky_sphere1.png");
 
 	// A sky sphere should reproduce its texture without directional-light
 	// shading. Explicitly normalize every imported material so a replacement
@@ -25,10 +27,18 @@ void Skydome::Initialize(KamataEngine::Model* model) {
 	}
 
 	worldTransform_.Initialize();
+	worldTransform_.scale_ = {kModelScale, kModelScale, kModelScale};
+	std::mt19937 randomEngine(std::random_device{}());
+	std::uniform_real_distribution<float> initialAngleDistribution(
+	    0.0f, 2.0f * std::numbers::pi_v<float>);
+	worldTransform_.rotation_.y = initialAngleDistribution(randomEngine);
 	WorldTransformUpdate(worldTransform_);
 }
 
-void Skydome::Update() {
+void Skydome::Update(bool shouldRotate) {
+	if (shouldRotate) {
+		worldTransform_.rotation_.y -= kReverseRotationSpeed * kDeltaTime;
+	}
 	WorldTransformUpdate(worldTransform_);
 }
 

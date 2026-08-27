@@ -7,12 +7,15 @@
 using namespace KamataEngine;
 
 SceneManager::~SceneManager() {
+	StopCurrentBgm();
 	DestroyDimCanvas();
 	delete blackCanvas_;
 	delete whiteCanvas_;
 }
 
 void SceneManager::Initialize() {
+	LoadAudioResources();
+
 	uiCamera_.farZ = 100.0f;
 	uiCamera_.Initialize();
 	uiCamera_.translation_ = {0.0f, 0.0f, -10.0f};
@@ -21,7 +24,7 @@ void SceneManager::Initialize() {
 	titleScene_.Initialize();
 	titleControlGuide_.Initialize();
 	difficultySelectScene_.Initialize();
-	countdownScene_.Initialize();
+	countdownScene_.Initialize(countdownSfxSoundHandle_);
 	gameOverScene_.Initialize();
 	gameClearScene_.Initialize();
 	fallenBlockCounter_.Initialize();
@@ -37,6 +40,78 @@ void SceneManager::Initialize() {
 	dimCanvasAlpha_ = kDimOpacity;
 	blackCanvasAlpha_ = 0.0f;
 	whiteCanvasAlpha_ = 0.0f;
+	PlayBgm(titleSceneBgmSoundHandle_, false);
+}
+
+void SceneManager::LoadAudioResources() {
+	Audio* audio = Audio::GetInstance();
+
+	// BGM
+	clearPhaseBgmSoundHandle_ =
+	    audio->LoadWave("BGM/Clear_Phase_BGM.mp3");
+	gameSceneBgmSoundHandle_ =
+	    audio->LoadWave("BGM/Game_Scene_BGM.mp3");
+	funnyBgmSoundHandle_ =
+	    audio->LoadWave("BGM/mfcc-funny-funny-music-572631.mp3");
+	titleSceneBgmSoundHandle_ =
+	    audio->LoadWave("BGM/Title_Scene_BGM.mp3");
+	victoryScreenBgmSoundHandle_ =
+	    audio->LoadWave("BGM/Victory_Screen_BGM.mp3");
+
+	// SFX
+	countdownSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Countdown_SFX.mp3");
+	debugModeSfxSoundHandle_ =
+	    audio->LoadWave("SFX/debugmode_SFX.mp3");
+	difficultyChangeSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Difficulty_Change_SFX.mp3");
+	failSoundHandle_ = audio->LoadWave("SFX/Fail_Sound.mp3");
+	gameOverSoundHandle_ = audio->LoadWave("SFX/Game_Over_Sound.mp3");
+	jumpSfxSoundHandle_ = audio->LoadWave("SFX/JumpSFX.mp3");
+	returnToTitleSpaceSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Return_to_Title_Space_SFX.mp3");
+	slimeSfxSoundHandle_ = audio->LoadWave("SFX/SlimeSFX.mp3");
+	fireworksSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Fireworks_SFX.mp3");
+	spaceDodgeSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Space_Dodge_SFX.mp3");
+	stairJumpSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Stair_Jump_SFX.mp3");
+	titleSpaceSfxSoundHandle_ =
+	    audio->LoadWave("SFX/Title_Space_SFX.mp3");
+}
+
+void SceneManager::PlayBgm(uint32_t soundHandle, bool loop) {
+	StopCurrentBgm();
+	currentBgmVoiceHandle_ = Audio::GetInstance()->PlayWave(
+	    soundHandle, loop, kBgmVolume);
+}
+
+void SceneManager::PlaySfx(uint32_t soundHandle) {
+	Audio::GetInstance()->PlayWave(soundHandle, false, 1.0f);
+}
+
+void SceneManager::StopCurrentBgm() {
+	if (!currentBgmVoiceHandle_) {
+		return;
+	}
+	Audio* audio = Audio::GetInstance();
+	if (audio->IsPlaying(*currentBgmVoiceHandle_)) {
+		audio->StopWave(*currentBgmVoiceHandle_);
+	}
+	currentBgmVoiceHandle_.reset();
+}
+
+void SceneManager::UpdateClearPhaseBgm() {
+	if (!gameScene_->IsClearSequenceActive() ||
+	    isClearPhaseBgmStarted_) {
+		return;
+	}
+	clearPhaseBgmTimer_ += kDeltaTime;
+	if (clearPhaseBgmTimer_ >= kClearPhaseBgmStartDelay) {
+		PlayBgm(clearPhaseBgmSoundHandle_, false);
+		isClearPhaseBgmStarted_ = true;
+	}
 }
 
 void SceneManager::Update() {
@@ -47,6 +122,8 @@ void SceneManager::Update() {
 		titleScene_.Update();
 		titleControlGuide_.Update();
 		if (input->TriggerKey(DIK_SPACE)) {
+			PlaySfx(titleSpaceSfxSoundHandle_);
+			StopCurrentBgm();
 			titleScene_.StartExit();
 			titleControlGuide_.StartExit();
 			state_ = State::TitleExit;
@@ -76,12 +153,25 @@ void SceneManager::Update() {
 		difficultySelectScene_.Update();
 		if (difficultySelectScene_.IsReadyForInput()) {
 			if (input->TriggerKey(DIK_A)) {
+				const LevelDifficulty previousDifficulty =
+				    difficultySelectScene_.GetSelectedDifficulty();
 				difficultySelectScene_.SelectPrevious();
+				if (difficultySelectScene_.GetSelectedDifficulty() !=
+				    previousDifficulty) {
+					PlaySfx(difficultyChangeSfxSoundHandle_);
+				}
 			}
 			if (input->TriggerKey(DIK_D)) {
+				const LevelDifficulty previousDifficulty =
+				    difficultySelectScene_.GetSelectedDifficulty();
 				difficultySelectScene_.SelectNext();
+				if (difficultySelectScene_.GetSelectedDifficulty() !=
+				    previousDifficulty) {
+					PlaySfx(difficultyChangeSfxSoundHandle_);
+				}
 			}
 			if (input->TriggerKey(DIK_SPACE)) {
+				PlaySfx(spaceDodgeSfxSoundHandle_);
 				difficultySelectScene_.Confirm();
 			}
 		}
@@ -128,6 +218,7 @@ void SceneManager::Update() {
 		    countdownScene_.IsFinalExitPhase()) {
 			ResetGameScene(true);
 			gameplayStartedDuringCountdown_ = true;
+			PlayBgm(gameSceneBgmSoundHandle_, true);
 		}
 
 		if (gameplayStartedDuringCountdown_) {
@@ -146,10 +237,12 @@ void SceneManager::Update() {
 		break;
 	case State::Gameplay:
 		gameScene_->Update(true);
+		UpdateClearPhaseBgm();
 		if (gameScene_->IsGameClearReady()) {
 			UnlockNextDifficultyAfterClear();
 			gameClearScene_.Start();
 			EnsureWhiteCanvas();
+			PlayBgm(victoryScreenBgmSoundHandle_, false);
 			whiteCanvasAlpha_ = 0.0f;
 			state_ = State::GameClearDisplay;
 			break;
@@ -163,6 +256,7 @@ void SceneManager::Update() {
 		whiteCanvasAlpha_ = gameClearScene_.GetCanvasOpacity();
 		if (gameClearScene_.IsReadyForInput() &&
 		    input->TriggerKey(DIK_SPACE)) {
+			PlaySfx(returnToTitleSpaceSfxSoundHandle_);
 			transitionTime_ = 0.0f;
 			state_ = State::ClearWhiteFade;
 		}
@@ -180,6 +274,7 @@ void SceneManager::Update() {
 			EnsureDimCanvas();
 			dimCanvasAlpha_ = kDimOpacity;
 			transitionTime_ = 0.0f;
+			PlayBgm(titleSceneBgmSoundHandle_, false);
 			state_ = State::ClearReturnReveal;
 		}
 		break;
@@ -211,6 +306,7 @@ void SceneManager::Update() {
 		gameOverScene_.Update();
 		if (gameOverScene_.IsReadyForInput() &&
 		    input->TriggerKey(DIK_SPACE)) {
+			PlaySfx(returnToTitleSpaceSfxSoundHandle_);
 			BeginReturnToTitle();
 		}
 		break;
@@ -226,6 +322,7 @@ void SceneManager::Update() {
 			titleControlGuide_.Reset();
 			dimCanvasAlpha_ = kDimOpacity;
 			transitionTime_ = 0.0f;
+			PlayBgm(titleSceneBgmSoundHandle_, false);
 			state_ = State::ReturnTitleReveal;
 		}
 		break;
@@ -315,6 +412,8 @@ void SceneManager::TriggerGameOver() {
 	if (state_ != State::Gameplay) {
 		return;
 	}
+	StopCurrentBgm();
+	PlaySfx(gameOverSoundHandle_);
 	transitionTime_ = 0.0f;
 	EnsureDimCanvas();
 	dimCanvasAlpha_ = 0.0f;
@@ -323,7 +422,18 @@ void SceneManager::TriggerGameOver() {
 
 void SceneManager::ResetGameScene(bool obstacleGenerationEnabled) {
 	gameScene_ = std::make_unique<GameScene>(selectedDifficulty_);
-	gameScene_->Initialize(obstacleGenerationEnabled);
+	gameScene_->Initialize(
+	    obstacleGenerationEnabled,
+	    GameSfxHandles{
+	        .debugModeSoundHandle = debugModeSfxSoundHandle_,
+	        .failSoundHandle = failSoundHandle_,
+	        .jumpSoundHandle = jumpSfxSoundHandle_,
+	        .slimeSoundHandle = slimeSfxSoundHandle_,
+	        .fireworksSoundHandle = fireworksSfxSoundHandle_,
+	        .stairJumpSoundHandle = stairJumpSfxSoundHandle_,
+	    });
+	clearPhaseBgmTimer_ = 0.0f;
+	isClearPhaseBgmStarted_ = false;
 }
 
 void SceneManager::EnsureDimCanvas() {
@@ -450,6 +560,7 @@ void SceneManager::ApplyDifficultyAndReturnToTitle(
 	ResetGameScene(false);
 	titleScene_.Reset();
 	titleControlGuide_.Reset();
+	PlayBgm(titleSceneBgmSoundHandle_, false);
 	state_ = State::Title;
 }
 

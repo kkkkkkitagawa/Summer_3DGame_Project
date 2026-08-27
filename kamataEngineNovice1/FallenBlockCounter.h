@@ -27,6 +27,7 @@ private:
 	static inline constexpr std::size_t kDigitModelCount = 10;
 	static inline constexpr std::size_t kMaxDisplayDigits = 20;
 	static inline constexpr float kModelScale = 0.7f;
+	static inline constexpr float kOutlineExpansion = 0.5f / 32.0f;
 	static inline constexpr float kDigitSpacing = 0.32f;
 	static inline constexpr float kTopPositionY = 3.35f;
 	static inline constexpr float kShrinkDuration = 0.08f;
@@ -36,7 +37,10 @@ private:
 	std::array<KamataEngine::Model*, kDigitModelCount> digitModels_ = {};
 	std::array<KamataEngine::WorldTransform, kMaxDisplayDigits>
 	    digitTransforms_ = {};
+	std::array<KamataEngine::WorldTransform, kMaxDisplayDigits>
+	    digitOutlineTransforms_ = {};
 	std::array<std::size_t, kMaxDisplayDigits> displayedDigits_ = {};
+	KamataEngine::ObjectColor outlineColor_;
 	uint32_t textureHandle_ = 0;
 	std::size_t visibleDigitCount_ = 0;
 	std::size_t displayedValue_ = 0;

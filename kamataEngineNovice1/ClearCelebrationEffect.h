@@ -12,7 +12,7 @@ public:
 	ClearCelebrationEffect();
 	~ClearCelebrationEffect();
 
-	void Initialize();
+	void Initialize(uint32_t fireworksSfxSoundHandle);
 	void StartFireworks(float obstacleRetractionDuration);
 	void StartConfetti();
 	void StartDifficultySelectCelebration();
@@ -59,6 +59,7 @@ private:
 	static inline constexpr std::size_t kMaximumParticleCount = 220;
 
 	uint32_t textureHandle_ = 0;
+	uint32_t fireworksSfxSoundHandle_ = 0;
 	std::vector<Particle> particles_;
 	std::mt19937 randomEngine_;
 	float fireworkElapsedTime_ = 0.0f;

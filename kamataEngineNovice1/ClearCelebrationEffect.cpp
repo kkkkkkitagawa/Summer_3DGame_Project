@@ -14,7 +14,8 @@ ClearCelebrationEffect::ClearCelebrationEffect()
 
 ClearCelebrationEffect::~ClearCelebrationEffect() = default;
 
-void ClearCelebrationEffect::Initialize() {
+void ClearCelebrationEffect::Initialize(uint32_t fireworksSfxSoundHandle) {
+	fireworksSfxSoundHandle_ = fireworksSfxSoundHandle;
 	textureHandle_ = TextureManager::Load("white1x1.png");
 	particles_.reserve(kMaximumParticleCount);
 }
@@ -182,6 +183,11 @@ void ClearCelebrationEffect::Draw() const {
 }
 
 void ClearCelebrationEffect::SpawnFirework() {
+	// Difficulty-select fireworks are decorative and intentionally silent.
+	if (!areFireworksLooping_) {
+		Audio::GetInstance()->PlayWave(
+		    fireworksSfxSoundHandle_, false, 1.0f);
+	}
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
 	const float screenWidth =
 	    static_cast<float>(dxCommon->GetBackBufferWidth());

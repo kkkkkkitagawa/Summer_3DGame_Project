@@ -14,6 +14,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <optional>
 
 class SceneManager {
 public:
@@ -46,6 +47,11 @@ private:
 	static inline constexpr std::size_t kDimGradientSliceCount = 96;
 
 	void ResetGameScene(bool obstacleGenerationEnabled);
+	void LoadAudioResources();
+	void PlayBgm(uint32_t soundHandle, bool loop);
+	void PlaySfx(uint32_t soundHandle);
+	void StopCurrentBgm();
+	void UpdateClearPhaseBgm();
 	void EnsureDimCanvas();
 	void DestroyDimCanvas();
 	void EnsureBlackCanvas();
@@ -72,6 +78,31 @@ private:
 	KamataEngine::Sprite* blackCanvas_ = nullptr;
 	KamataEngine::Sprite* whiteCanvas_ = nullptr;
 	uint32_t whiteTextureHandle_ = 0;
+
+	// BGM sound handles
+	uint32_t clearPhaseBgmSoundHandle_ = 0;
+	uint32_t gameSceneBgmSoundHandle_ = 0;
+	uint32_t funnyBgmSoundHandle_ = 0;
+	uint32_t titleSceneBgmSoundHandle_ = 0;
+	uint32_t victoryScreenBgmSoundHandle_ = 0;
+	std::optional<uint32_t> currentBgmVoiceHandle_;
+	float clearPhaseBgmTimer_ = 0.0f;
+	bool isClearPhaseBgmStarted_ = false;
+
+	// SFX sound handles
+	uint32_t countdownSfxSoundHandle_ = 0;
+	uint32_t debugModeSfxSoundHandle_ = 0;
+	uint32_t difficultyChangeSfxSoundHandle_ = 0;
+	uint32_t failSoundHandle_ = 0;
+	uint32_t gameOverSoundHandle_ = 0;
+	uint32_t jumpSfxSoundHandle_ = 0;
+	uint32_t returnToTitleSpaceSfxSoundHandle_ = 0;
+	uint32_t slimeSfxSoundHandle_ = 0;
+	uint32_t fireworksSfxSoundHandle_ = 0;
+	uint32_t spaceDodgeSfxSoundHandle_ = 0;
+	uint32_t stairJumpSfxSoundHandle_ = 0;
+	uint32_t titleSpaceSfxSoundHandle_ = 0;
+
 	State state_ = State::Title;
 	float transitionTime_ = 0.0f;
 	float dimCanvasAlpha_ = 1.0f;
@@ -84,6 +115,9 @@ private:
 	LevelDifficulty maximumUnlockedDifficulty_ = LevelDifficulty::Easy;
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;
+	static inline constexpr float kBgmVolume = 0.3f;
+	// Fireworks begin 2.4 seconds after the clear sequence starts.
+	static inline constexpr float kClearPhaseBgmStartDelay = 1.4f;
 	static inline constexpr float kDimOpacity = 1.0f;
 	static inline constexpr float kDimTopAlpha = 0.3f;
 	static inline constexpr float kDimBottomAlpha = 1.0f;

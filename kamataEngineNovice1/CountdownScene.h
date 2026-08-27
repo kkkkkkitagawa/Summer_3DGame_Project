@@ -9,7 +9,7 @@ class CountdownScene {
 public:
 	~CountdownScene();
 
-	void Initialize();
+	void Initialize(uint32_t countdownSfxSoundHandle);
 	void Reset();
 	void Update();
 	void Draw(const KamataEngine::Camera& camera) const;
@@ -24,6 +24,8 @@ private:
 	std::array<KamataEngine::Model*, 3> models_ = {};
 	std::array<uint32_t, 3> textureHandles_ = {};
 	std::array<KamataEngine::WorldTransform, 3> worldTransforms_ = {};
+	uint32_t countdownSfxSoundHandle_ = 0;
+	std::size_t lastPlayedNumberIndex_ = 3;
 	float elapsedTime_ = 0.0f;
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;

@@ -175,6 +175,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</C
 	<ClCompile Include="DeathHazardLine.cpp" />
 	<ClCompile Include="DifficultySelectScene.cpp" />
 	<ClCompile Include="FallenBlockCounter.cpp" />
+	<ClCompile Include="FloatingBlockSystem.cpp" />
 	<ClCompile Include="GameClearScene.cpp" />
 	<ClCompile Include="GameOverScene.cpp" />
     <ClCompile Include="GameScene.cpp" />
@@ -185,6 +186,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</C
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Skydome.cpp" />
 	<ClCompile Include="SlimeObstacle.cpp" />
+	<ClCompile Include="SlowdownTrailEffect.cpp" />
 	<ClCompile Include="SceneManager.cpp" />
 	<ClCompile Include="TitleScene.cpp" />
 	<ClCompile Include="TitleControlGuide.cpp" />
@@ -197,6 +199,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</C
 	<ClInclude Include="DeathHazardLine.h" />
 	<ClInclude Include="DifficultySelectScene.h" />
 	<ClInclude Include="FallenBlockCounter.h" />
+	<ClInclude Include="FloatingBlockSystem.h" />
 	<ClInclude Include="GameClearScene.h" />
 	<ClInclude Include="GameData.h" />
     <ClInclude Include="GameScene.h" />
@@ -208,6 +211,7 @@ xcopy "$(ProjectDir)..\Resources" "$(OutDirFullPath)Resources" /S /E /I /R /Y</C
     <ClInclude Include="Player.h" />
     <ClInclude Include="Skydome.h" />
 	<ClInclude Include="SlimeObstacle.h" />
+	<ClInclude Include="SlowdownTrailEffect.h" />
 	<ClInclude Include="SceneManager.h" />
 	<ClInclude Include="TitleScene.h" />
 	<ClInclude Include="TitleControlGuide.h" />

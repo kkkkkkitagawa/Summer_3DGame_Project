@@ -29,7 +29,8 @@ CountdownScene::~CountdownScene() {
 	}
 }
 
-void CountdownScene::Initialize() {
+void CountdownScene::Initialize(uint32_t countdownSfxSoundHandle) {
+	countdownSfxSoundHandle_ = countdownSfxSoundHandle;
 	// 描画順は3、2、1。
 	models_[0] = Model::CreateFromOBJ("three", false);
 	models_[1] = Model::CreateFromOBJ("two", false);
@@ -49,6 +50,7 @@ void CountdownScene::Initialize() {
 
 void CountdownScene::Reset() {
 	elapsedTime_ = 0.0f;
+	lastPlayedNumberIndex_ = models_.size();
 	for (WorldTransform& transform : worldTransforms_) {
 		transform.translation_ = {0.0f, kOffscreenY, 0.0f};
 		WorldTransformUpdate(transform);
@@ -59,6 +61,12 @@ void CountdownScene::Reset() {
 void CountdownScene::Update() {
 	elapsedTime_ = (std::min)(elapsedTime_ + kDeltaTime, kTotalDuration);
 	if (!IsFinished()) {
+		const std::size_t currentNumberIndex = GetCurrentNumberIndex();
+		if (currentNumberIndex != lastPlayedNumberIndex_) {
+			Audio::GetInstance()->PlayWave(
+			    countdownSfxSoundHandle_, false, 1.0f);
+			lastPlayedNumberIndex_ = currentNumberIndex;
+		}
 		UpdateCurrentNumberTransform();
 	}
 }

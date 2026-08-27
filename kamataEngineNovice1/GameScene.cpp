@@ -143,7 +143,9 @@ GameScene::~GameScene() {
 	delete mouseCircleSprite_;
 }
 
-void GameScene::Initialize(bool obstacleGenerationEnabled) {
+void GameScene::Initialize(
+    bool obstacleGenerationEnabled, const GameSfxHandles& sfxHandles) {
+	sfxHandles_ = sfxHandles;
 	fallenMapBlockCount_ = 0;
 	victoryTarget_ = SelectVictoryTarget();
 	clearSequenceState_ = ClearSequenceState::Playing;
@@ -200,13 +202,14 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	};
 	player_->Initialize(
 	    modelPlayer_, playerPosition, kPlayerOutlineThickness);
+	slowdownTrailEffect_.Initialize();
 	deathHazardLine_.Initialize({
 	    -2.5f,
 	    sceneMap_.groundHeight + kBlockSize * 0.5f +
 	        3.0f / kPixelsPerWorldUnit,
 	    sceneMap_.origin.z,
 	});
-	clearCelebrationEffect_.Initialize();
+	clearCelebrationEffect_.Initialize(sfxHandles_.fireworksSoundHandle);
 
 	modelAxis_ = Model::CreateFromOBJ("axis", true);
 	assert(modelAxis_);
@@ -221,6 +224,7 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 	playerCamera_.translation_ = {-3.269f, 7.610f, -10.224f};
 	playerCamera_.rotation_ = {0.519934f, 0.404916f, 0.0f};
 	playerCamera_.UpdateMatrix();
+	floatingBlockSystem_.Initialize(playerCamera_, sceneMap_.groundHeight);
 
 	debugCamera_.farZ = 1000.0f;
 	debugCamera_.Initialize();
@@ -255,12 +259,15 @@ void GameScene::Initialize(bool obstacleGenerationEnabled) {
 }
 
 void GameScene::Update(bool allowMapRotationInput) {
+	floatingBlockSystem_.Update();
+	slowdownTrailEffect_.Update(
+	    player_->IsSlowdownActive(), player_->GetWorldPosition(), kDeltaTime);
 	if (deathSequenceState_ != DeathSequenceState::Inactive) {
 		UpdateDeathSequence();
 		return;
 	}
 
-	skydome_->Update();
+	skydome_->Update(!IsMapMovementStoppedForClear());
 	switch (clearSequenceState_) {
 	case ClearSequenceState::Playing:
 	case ClearSequenceState::RunwayApproach:
@@ -529,6 +536,8 @@ void GameScene::UpdateClearSequence() {
 		if (player_->GetWorldPosition().x >= contactX) {
 			player_->SetPositionX(contactX);
 			player_->StartClearLaunch();
+			Audio::GetInstance()->PlayWave(
+			    sfxHandles_.stairJumpSoundHandle, false, 1.0f);
 			clearCelebrationEffect_.StartConfetti();
 			clearSequenceState_ = ClearSequenceState::PlayerLaunch;
 		}
@@ -578,6 +587,8 @@ void GameScene::UpdateDeathSequence() {
 
 		if (progress >= 1.0f) {
 			player_->StartDeathFall();
+			Audio::GetInstance()->PlayWave(
+			    sfxHandles_.failSoundHandle, false, 1.0f);
 			deathSequenceState_ = DeathSequenceState::PlayerFall;
 		}
 		return;
@@ -635,6 +646,8 @@ void GameScene::UpdateMapRotationInput() {
 		StartBlockedRotationFeedback(turnDirection);
 		return;
 	}
+	Audio::GetInstance()->PlayWave(
+	    sfxHandles_.jumpSoundHandle, false, 1.0f);
 
 	blockedRotationFeedbackTime_ = 0.0f;
 	blockedRotationFeedbackDirection_ = 0;
@@ -737,13 +750,16 @@ float GameScene::CalculateBlockedRotationOffset() const {
 	       std::sin(std::numbers::pi_v<float> * progress);
 }
 
+bool GameScene::IsMapMovementStoppedForClear() const {
+	return clearSequenceState_ == ClearSequenceState::PlayerRun ||
+	       clearSequenceState_ == ClearSequenceState::PlayerLaunch ||
+	       clearSequenceState_ == ClearSequenceState::Ready;
+}
+
 void GameScene::UpdateMapBlocks() {
 	UpdateDetachedObstacles();
 	const float blockedRotationOffset = CalculateBlockedRotationOffset();
-	const bool isMapStoppedForClear =
-	    clearSequenceState_ == ClearSequenceState::PlayerRun ||
-	    clearSequenceState_ == ClearSequenceState::PlayerLaunch ||
-	    clearSequenceState_ == ClearSequenceState::Ready;
+	const bool isMapStoppedForClear = IsMapMovementStoppedForClear();
 	const float activeMapMoveSpeed =
 	    isMapStoppedForClear ? 0.0f : mapMoveSpeed_;
 	DirectXCommon* dxCommon = DirectXCommon::GetInstance();
@@ -967,6 +983,10 @@ void GameScene::ResolvePlayerObstacleCollisions() {
 			if (slime->TriggerHit()) {
 				player_->StartKnockback(
 				    kSlimeKnockbackDistance, kSlimeKnockbackDuration);
+				player_->StartSlowdown(
+				    kSlimeSlowdownDuration, kSlimeSpeedMultiplier);
+				Audio::GetInstance()->PlayWave(
+				    sfxHandles_.slimeSoundHandle, false, 1.0f);
 				slimeTriggered = true;
 				break;
 			}
@@ -1026,6 +1046,8 @@ void GameScene::UpdateDebugCommand() {
 		++debugCommandIndex_;
 		if (debugCommandIndex_ == command.size()) {
 			isDebugMode_ = !isDebugMode_;
+			Audio::GetInstance()->PlayWave(
+			    sfxHandles_.debugModeSoundHandle, false, 1.0f);
 			debugCommandIndex_ = 0;
 			difficultyCommandInput_.clear();
 		}
@@ -1324,10 +1346,12 @@ void GameScene::Draw() {
 	Model::PreDraw();
 	skydome_->Draw(GetActiveCamera());
 	Model::PostDraw();
+	floatingBlockSystem_.Draw(GetActiveCamera());
 
 	DrawMapGrid();
 	DrawMapBlocks();
 	deathHazardLine_.Draw(GetActiveCamera());
+	slowdownTrailEffect_.Draw(GetActiveCamera());
 	DrawPlayer();
 
 	if (isDebugMode_) {

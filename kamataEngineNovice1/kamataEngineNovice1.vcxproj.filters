@@ -21,6 +21,7 @@
 	<ClCompile Include="DeathHazardLine.cpp" />
 	<ClCompile Include="DifficultySelectScene.cpp" />
 	<ClCompile Include="FallenBlockCounter.cpp" />
+	<ClCompile Include="FloatingBlockSystem.cpp" />
 	<ClCompile Include="GameClearScene.cpp" />
     <ClCompile Include="GameScene.cpp" />
 	<ClCompile Include="GoalStair.cpp" />
@@ -29,6 +30,7 @@
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Skydome.cpp" />
 	<ClCompile Include="SlimeObstacle.cpp" />
+	<ClCompile Include="SlowdownTrailEffect.cpp" />
 	<ClCompile Include="TitleControlGuide.cpp" />
     <ClCompile Include="WorldTransformUpdate.cpp" />
     <ClCompile Include="C:\KamataEngine\Adapter\Novice.cpp">
@@ -41,6 +43,7 @@
 	<ClInclude Include="DeathHazardLine.h" />
 	<ClInclude Include="DifficultySelectScene.h" />
 	<ClInclude Include="FallenBlockCounter.h" />
+	<ClInclude Include="FloatingBlockSystem.h" />
 	<ClInclude Include="GameClearScene.h" />
     <ClInclude Include="GameData.h" />
     <ClInclude Include="GameScene.h" />
@@ -50,6 +53,7 @@
     <ClInclude Include="Player.h" />
     <ClInclude Include="Skydome.h" />
 	<ClInclude Include="SlimeObstacle.h" />
+	<ClInclude Include="SlowdownTrailEffect.h" />
 	<ClInclude Include="TitleControlGuide.h" />
     <ClInclude Include="WorldTransformUpdate.h" />
     <ClInclude Include="C:\KamataEngine\DirectXGame\audio\Audio.h">

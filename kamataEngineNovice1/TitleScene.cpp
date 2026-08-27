@@ -25,7 +25,7 @@ void TitleScene::Initialize() {
 	assert(model_);
 	textureHandle_ = TextureManager::Load("Title/title.png");
 	worldTransform_.Initialize();
-	worldTransform_.scale_ = {-1.2f, 1.2f, 1.2f};
+	worldTransform_.scale_ = {-kModelScale, kModelScale, kModelScale};
 	// Blender由来の文字はローカルX-Z平面にあるため画面へ正対させる。
 	// +90度では裏面になるため、X反転も組み合わせて鏡像を補正する。
 	worldTransform_.rotation_.x = std::numbers::pi_v<float> * 0.5f;

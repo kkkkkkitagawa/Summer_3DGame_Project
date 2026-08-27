@@ -22,8 +22,10 @@ public:
 	AABB GetAABB() const;
 	void SetPositionX(float positionX);
 	void StartKnockback(float distance, float duration);
+	void StartSlowdown(float duration, float speedMultiplier);
 	void StartTurnJump();
 	bool IsKnockbackActive() const { return isKnockbackActive_; }
+	bool IsSlowdownActive() const { return isSlowdownActive_; }
 	bool IsClearLaunchFinished() const { return isClearLaunchFinished_; }
 	bool IsDeathFallFinished() const { return isDeathFallFinished_; }
 
@@ -41,6 +43,7 @@ public:
 	static inline constexpr float kModelSourceHalfSize = 1.0f;
 
 private:
+	void UpdateSlowdown(float deltaTime);
 	void UpdateTurnJump(float deltaTime);
 	void UpdateTransforms();
 	KamataEngine::WorldTransform worldTransform_;
@@ -61,7 +64,11 @@ private:
 	float knockbackDistance_ = 0.0f;
 	float knockbackDuration_ = 0.0f;
 	float knockbackElapsed_ = 0.0f;
+	float slowdownDuration_ = 0.0f;
+	float slowdownElapsed_ = 0.0f;
+	float slowdownSpeedMultiplier_ = 1.0f;
 	bool isKnockbackActive_ = false;
+	bool isSlowdownActive_ = false;
 	bool isTurnJumpActive_ = false;
 	bool isClearLaunchFinished_ = false;
 	bool isDeathFallFinished_ = false;

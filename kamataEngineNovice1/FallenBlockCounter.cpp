@@ -23,11 +23,17 @@ void FallenBlockCounter::Initialize() {
 	}
 	textureHandle_ = TextureManager::Load("number/num/num.png");
 
-	for (WorldTransform& transform : digitTransforms_) {
+	for (std::size_t index = 0; index < digitTransforms_.size(); ++index) {
+		WorldTransform& transform = digitTransforms_[index];
+		WorldTransform& outlineTransform = digitOutlineTransforms_[index];
 		transform.Initialize();
+		outlineTransform.Initialize();
 		// Blender文字のX-Z平面を画面へ正対させる。
 		transform.rotation_.x = std::numbers::pi_v<float> * 0.5f;
+		outlineTransform.rotation_ = transform.rotation_;
 	}
+	outlineColor_.Initialize();
+	outlineColor_.SetColor({0.0f, 0.0f, 0.0f, 1.0f});
 	pendingValue_ = 0;
 	animationPhase_ = AnimationPhase::Stable;
 	animationTime_ = 0.0f;
@@ -91,21 +97,41 @@ void FallenBlockCounter::SetDisplayedValue(std::size_t value) {
 		    kTopPositionY,
 		    0.0f,
 		};
+		digitOutlineTransforms_[index].translation_ = transform.translation_;
 		WorldTransformUpdate(transform);
+		WorldTransformUpdate(digitOutlineTransforms_[index]);
 	}
 }
 
 void FallenBlockCounter::ApplyAnimationScale(float scaleRatio) {
 	const float animatedScale = kModelScale * scaleRatio;
+	const float animatedOutlineExpansion = kOutlineExpansion * scaleRatio;
 	for (std::size_t index = 0; index < visibleDigitCount_; ++index) {
 		WorldTransform& transform = digitTransforms_[index];
+		WorldTransform& outlineTransform = digitOutlineTransforms_[index];
 		transform.scale_ = {
 		    -animatedScale, animatedScale, animatedScale};
+		outlineTransform.scale_ = {
+		    -(animatedScale + animatedOutlineExpansion),
+		    animatedScale + animatedOutlineExpansion,
+		    animatedScale + animatedOutlineExpansion,
+		};
 		WorldTransformUpdate(transform);
+		WorldTransformUpdate(outlineTransform);
 	}
 }
 
 void FallenBlockCounter::Draw(const Camera& camera) const {
+	Model::PreDraw(
+	    Model::CullingMode::kFront, Model::BlendMode::kNone,
+	    Model::DepthTestMode::kOff);
+	for (std::size_t index = 0; index < visibleDigitCount_; ++index) {
+		digitModels_[displayedDigits_[index]]->Draw(
+		    digitOutlineTransforms_[index], camera, textureHandle_,
+		    &outlineColor_);
+	}
+	Model::PostDraw();
+
 	Model::PreDraw(
 	    Model::CullingMode::kNone, Model::BlendMode::kNormal,
 	    Model::DepthTestMode::kOff);

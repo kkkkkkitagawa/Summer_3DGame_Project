@@ -28,7 +28,10 @@ private:
 	float exitStartY_ = 0.0f;
 
 	static inline constexpr float kDeltaTime = 1.0f / 60.0f;
-	static inline constexpr float kBaseY = 0.0f;
+	// The updated title is wider than the original model, so keep it framed
+	// while placing it above the control guide.
+	static inline constexpr float kModelScale = 0.90f;
+	static inline constexpr float kBaseY = 1.1f;
 	static inline constexpr float kOffscreenY = 5.2f;
 	static inline constexpr float kFloatingAmplitude = 0.16f;
 	static inline constexpr float kFloatingCycle = 2.4f;
